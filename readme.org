@@ -1,1 +1,31 @@
 #+TITLE: readme
+第四章"04-Case:如何'严肃'阅读一本书"探讨以org为工作助力阅读的系统方法,
+以org格式的SICP为素材,
+摆在眼前的问题是, 绝大部分的优秀的书籍并没有org格式.
+
+本项目将逐步累计org-books.
+
+项目"步步为营, 零秒精通Emacs"的完结进度
+
+- 01.Semantic Keybinding
+- 02.Emacs as an Editor
+- 03.God's Eyes and Hands by Dired and Bookmarks
+- 04.Emacs as a Notebook by Org
+- 04-Case:如何"严肃"阅读一本书
+- Appendix A: Ask and Harvest Answers
+- Appendix B: Git Version Control
+- Appendix C: Install Extensions
+  - Plantuml
+- Appendix D: Email Management
+
+本周收尾"05.Emacs as a Agenda by Org",
+参考书"Sprint:Solve Big Problems and Test New Ideas in Just Five Days"作为Reading-Plan的第一本书.
+
+*截屏部分内容*
+- Book Cover
+#+ATTR_HTML: :width 500px
+[[file:../images/Sprint-book-cover.png]]
+
+- 4.Start at the End
+#+ATTR_HTML: :width 600px
+[[file:../images/Sprint:Apollo.png]]

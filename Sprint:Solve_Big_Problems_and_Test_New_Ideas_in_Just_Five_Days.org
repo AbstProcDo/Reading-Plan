@@ -1,7 +1,7 @@
 #+TITLE: Sprint:
 # Solve Big Problems and Test New Ideas in Just Five Days
 * Table of Contents :toc:
-- [[#book][Book]]
+- [[#book-cover][Book Cover]]
   - [[#preface][Preface]]
   - [[#introduction][Introduction]]
   - [[#the-trouble-with-good-ideas][The trouble with good ideas]]
@@ -48,8 +48,7 @@
   - [[#braden-kowitz][Braden Kowitz]]
 - [[#image-credits][Image Credits]]
 
-* Book
-Cover
+* Book Cover
 #+ATTR_HTML: :width 300px
 [[file:images/00013.jpeg]]
 

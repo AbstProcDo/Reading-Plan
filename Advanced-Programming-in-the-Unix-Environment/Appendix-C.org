@@ -1,0 +1,1760 @@
+* Appendix C. Solutions to Selected Exercises
+
+** Chapter 1
+
+
+1.1 For this exercise, we use the following two arguments for the =ls=(1) command: =-i= prints the i-node number of the file or directory (we say more about i-nodes in [[file:part0016.xhtml#ch04lev1sec14][Section 4.14]]), and =-d= prints information about a directory instead of information on all the files in the directory.
+
+Execute the following:
+
+
+
+$ ls -ldi /etc/. /etc/..           -i says print i-node number
+ 162561 drwxr-xr-x  66 root    4096 Feb  5 03:59 /etc/./
+      2 drwxr-xr-x  19 root    4096 Jan 15 07:25 /etc/../
+$ ls -ldi /. /..                   both . and .. have i-node number 2
+      2 drwxr-xr-x  19 root    4096 Jan 15 07:25 /./
+      2 drwxr-xr-x  19 root    4096 Jan 15 07:25 /../
+
+1.2 The UNIX System is a multiprogramming, or multitasking, system. Other processes were running at the time this program was run.
+
+1.3 Since the /msg/ argument to =perror= is a pointer, =perror= could modify the string that /msg/ points to. The qualifier =const=, however, says that =perror= does not modify what the pointer points to. On the other hand, the error number argument to =strerror= is an integer, and since C passes all arguments by value, the =strerror= function couldn't modify this value even if it wanted to. (If the handling of function arguments in C is not clear, you should review Section 5.2 of Kernighan and Ritchie [[[file:part0038.xhtml#bib01_33][1988]]].)
+
+1.4 During the year 2038. We can solve the problem by making the =time_t= data type a 64-bit integer. If it is currently a 32-bit integer, applications will have to be recompiled to work properly. But the problem is worse. Some file systems and backup media store times in 32-bit integers. These would need to be updated as well, but we still need to be able to read the old format.
+
+1.5 Approximately 248 days.
+
+** Chapter 2
+
+
+2.1 The following technique is used by FreeBSD. The primitive data types that can appear in multiple headers are defined in the header =<machine/_types.h>=. For example:
+
+
+
+#ifndef _MACHINE__TYPES_H_
+#define _MACHINE__TYPES_H_
+typedef int             __int32_t;
+typedef unsigned int    __uint32_t;
+    .
+    .
+    .
+typedef __uint32_t      __size_t;
+    .
+    .
+    .
+#endif  /* _MACHINE__TYPES_H_ */
+
+In each of the headers that can define the =size_t= primitive system data type, we have the sequence
+
+#ifndef  _SIZE_T_DECLARED
+typedef __size_t       size_t;
+#define _SIZE_T_DECLARED
+#endif
+
+This way, the =typedef= for =size_t= is executed only once.
+
+2.3 If =OPEN_MAX= is indeterminate or ridiculously large (i.e., equal to =LONG_MAX=), we can use =getrlimit= to get the per-process maximum for open file descriptors. Since the per-process limit can be modified, we can't cache the value obtained from the previous call (it might have changed). See [[file:part0037.xhtml#app03fig01][Figure C.1]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <limits.h>
+#include <sys/resource.h>
+
+#define OPEN_MAX_GUESS  256
+
+long
+open_max(void)
+{
+    long openmax;
+    struct rlimit rl;
+
+    if ((openmax = sysconf(_SC_OPEN_MAX)) < 0 ||
+      openmax == LONG_MAX) {
+        if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
+            err_sys("can′t get file limit");
+        if (rl.rlim_max == RLIM_INFINITY)
+            openmax = OPEN_MAX_GUESS;
+        else
+            openmax = rl.rlim_max;
+    }
+    return(openmax);
+}
+
+--------------
+
+*Figure C.1* Alternative method for identifying the largest possible file descriptor
+
+** Chapter 3
+
+
+3.1 All disk I/O goes through the kernel's block buffers (also called the kernel's buffer cache). The exception to this is I/O on a raw disk device, which we aren't considering. (Some systems also provide a /direct I/O/ option to allow applications to bypass the kernel buffers, but we aren't considering this option either.) Chapter 3 of Bach [[[file:part0038.xhtml#bib01_14][1986]]] describes the operation of this buffer cache. Since the data that we =read= or =write= is buffered by the kernel, the term /unbuffered I/O/ refers to the lack of automatic buffering in the user process with these two functions. Each =read= or =write= invokes a single system call.
+
+3.3 Each call to =open= gives us a new file table entry. However, since both =open=s reference the same file, both file table entries point to the same v-node table entry. The call to =dup= references the existing file table entry. We show this in [[file:part0037.xhtml#app03fig02][Figure C.2]]. An =F_SETFD= on =fd1= affects only the file descriptor flags for =fd1=, but an =F_SETFL= on =fd1= affects the file table entry that both =fd1= and =fd2= point to.
+
+[[../Images/image01514.jpeg]]
+*Figure C.2* Result of =dup= and =open=
+
+3.4 If =fd= is 1, then the =dup2(fd, 1)= returns 1 without closing file descriptor 1. (Remember our discussion of this in [[file:part0015.xhtml#ch03lev1sec12][Section 3.12]].) After the three calls to =dup2=, all three descriptors point to the same file table entry. Nothing needs to be closed.
+
+If =fd= is 3, however, after the three calls to =dup2=, four descriptors are pointing to the same file table entry. In this case, we need to close descriptor 3.
+
+3.5 Since the shells process their command line from left to right, the command
+
+./a.out > outfile 2>&1
+
+first sets standard output to =outfile= and then =dup=s standard output onto descriptor 2 (standard error). The result is that standard output and standard error are set to the same file. Descriptors 1 and 2 both point to the same file table entry. With
+
+./a.out 2>&1 > outfile
+
+however, the =dup= is executed first, causing descriptor 2 to be the terminal (assuming that the command is run interactively). Then standard output is redirected to the file =outfile=. The result is that descriptor 1 points to the file table entry for =outfile=, and descriptor 2 points to the file table entry for the terminal.
+
+3.6 You can still =lseek= and =read= anywhere in the file, but a =write= automatically resets the file offset to the end of file before the data is written. This makes it impossible to =write= anywhere other than at the end of file.
+
+** Chapter 4
+
+
+4.1 If =stat= is called, it always tries to follow a symbolic link ([[file:part0016.xhtml#ch04fig17][Figure 4.17]]), so the program will never print a file type of “symbolic link.” For the example shown in the text, where =/dev/cdrom= is a symbolic link to =/dev/sr0=, =stat= reports that =/dev/cdrom= is a block special file, not a symbolic link. If the symbolic link points to a nonexistent file, =stat= returns an error.
+
+4.2 All permissions are turned off:
+
+
+
+$ umask 777
+$ date > temp.foo
+$ ls -l temp.foo
+----------  1 sar        29 Feb  5 14:06 temp.foo
+
+4.3 The following shows what happens when user-read permission is turned off:
+
+
+
+$ date > foo
+$ chmod u-r foo                  turn off user-read permission
+$ ls -l foo                      verify the file′s permissions
+--w-r--r--  1 sar         29 Feb  5   14:21  foo
+$ cat foo                        and try to read it
+cat: foo: Permission denied
+
+4.4 If we try, using either =open= or =creat=, to create a file that already exists, the file's access permission bits are not changed. We can verify this by running the program from [[file:part0016.xhtml#ch04fig09][Figure 4.9]]:
+
+
+
+$ rm foo bar                delete the files in case they already exist
+$ date > foo                create them with some data
+$ date > bar
+$ chmod a-r foo bar         turn off all read permissions
+$ ls -l foo bar             verify their permissions
+--w-------  1 sar        29 Feb  5 14:25 bar
+--w-------  1 sar        29 Feb  5 14:25 foo
+$ ./a.out                   run program from Figure 4.9
+$ ls -l foo bar             check permissions and sizes
+--w-------  1 sar         0 Feb  5 14:26 bar
+--w-------  1 sar         0 Feb  5 14:26 foo
+
+Note that the permissions didn't change but that the files were truncated.
+
+4.5 The size of a directory should never be 0, since there should always be entries for dot and dot-dot. The size of a symbolic link is the number of characters in the pathname contained in the symbolic link, and this pathname must always contain at least one character.
+
+4.7 The kernel has a default setting for the file access permission bits when it creates a new =core= file. In this example, it was =rw-r--r--=. This default value may or may not be modified by the =umask= value. The shell also has a default setting for the file access permission bits when it creates a new file for redirection. In this example, it was =rw-rw-rw-=, and this value is always modified by our current =umask=. In this example, our =umask= was 02.
+
+4.8 We can't use =du=, because it requires either the name of the file, as in
+
+du tempfile
+
+or a directory name, as in
+
+du.
+
+But when the =unlink= function returns, the directory entry for =tempfile= is gone. The =du .= command just shown would not account for the space still taken by =tempfile=. We have to use the =df= command in this example to see the actual amount of free space on the file system.
+
+4.9 If the link being removed is not the last link to the file, the file is not removed. In this case, the changed-status time of the file is updated. But if the link being removed is the last link to the file, it makes no sense to update this time, because all the information about the file (the i-node) is removed with the file.
+
+4.10 We recursively call our function =dopath= after opening a directory with =opendir=. Assuming that =opendir= uses a single file descriptor, this means that each time we descend one level, we use another descriptor. (We assume that the descriptor isn't closed until we're finished with a directory and call =closedir=.) This limits the depth of the file system tree that we can traverse to the maximum number of open descriptors for the process. Note that the =nftw= function as specified in the XSI option of the Single UNIX Specification allows the caller to specify the number of descriptors to use, implying that it can close and reuse descriptors.
+
+4.12 The =chroot= function is used by the Internet File Transfer Protocol (FTP) program to aid in security. Users without accounts on a system (termed /anonymous FTP/) are placed in a separate directory, and a =chroot= is done to that directory. This prevents the user from accessing any file outside this new root directory.
+
+In addition, =chroot= can be used to build a copy of a file system hierarchy at a new location and then modify this new copy without changing the original file system. This could be used, for example, to test the installation of new software packages.
+
+Only the superuser can execute =chroot=, and once you change the root of a process, it (and all its descendants) can never get back to the original root.
+
+4.13 First, call =stat= to fetch the three times for the file; then call =utime= to set the desired value. The value that we don't want to change in the call to =utime= should be the corresponding value from =stat=.
+
+4.14 The =finger=(1) command calls =stat= on the mailbox. The last-modification time is the time that mail was last received, and the last-access time is when the mail was last read.
+
+4.15 Both =cpio= and =tar= store only the modification time (=st_mtime=) in the archive. The access time isn't stored, because its value corresponds to the time the archive was created, since the file has to be read to be archived. The =-a= option to =cpio= has it reset the access time of each input file after the file has been read. This way, the creation of the archive doesn't change the access time. (Resetting the access time, however, does modify the changed-status time.) The changed-status time isn't stored in the archive, because we can't set this value on extraction even if it was archived. (The =utimes= function and its related functions, =futimens= and =utimensat=, can change only the access time and the modification time.)
+
+When the archive is read back (extracted), =tar=, by default, restores the modification time to the value in the archive. The =m= option to =tar= tells it to not restore the modification time from the archive; instead, the modification time is set to the time of extraction. In all cases with =tar=, the access time after extraction will be the time of extraction.
+
+In contrast, =cpio= sets the access time and the modification time to the time of extraction. By default, it doesn't try to set the modification time to the value on the archive. The =-m= option to =cpio= has it set both the access time and the modification time to the value that was archived.
+
+4.16 The kernel has no inherent limit on the depth of a directory tree. Nevertheless, many commands will fail on pathnames that exceed =PATH_MAX=. The program shown in [[file:part0037.xhtml#app03fig03][Figure C.3]] creates a directory tree that is 1,000 levels deep, with each level being a 45-character name. We are able to create this structure on all platforms; however, we cannot obtain the absolute pathname of the directory at the 1,000th level using =getcwd= on all platforms. On Mac OS X 10.6.8, we can never get =getcwd= to succeed while in the directory at the end of this long path. The program is able to retrieve the pathname on FreeBSD 8.0, Linux 3.2.0, and Solaris 10, but we have to call =realloc= numerous times to obtain a buffer that is large enough. Running this program on Linux 3.2.0 gives us
+
+
+
+$ ./a.out
+getcwd failed, size = 4096: Numerical result out of range
+getcwd failed, size = 4196: Numerical result out of range
+...                        418 more lines
+getcwd failed, size = 45896: Numerical result out of range
+getcwd failed, size = 45996: Numerical result out of range
+length = 46004
+                           the 46,004-byte pathname is printed here
+
+
+
+--------------
+
+#include "apue.h"
+#include <fcntl.h>
+
+#define DEPTH    1000           /* directory depth */
+#define STARTDIR "/tmp"
+#define NAME     "alonglonglonglonglonglonglonglonglonglongname"
+#define MAXSZ    (10*8192)
+
+int
+main(void)
+{
+    int     i;
+    size_t  size;
+    char    *path;
+
+    if (chdir(STARTDIR) < 0)
+        err_sys("chdir error");
+
+    for (i = 0; i < DEPTH; i++) {
+        if (mkdir(NAME, DIR_MODE) < 0)
+            err_sys("mkdir failed, i = %d", i);
+        if (chdir(NAME) < 0)
+            err_sys("chdir failed, i = %d", i);
+    }
+
+    if (creat("afile", FILE_MODE) < 0)
+        err_sys("creat error");
+
+    /*
+     * The deep directory is created, with a file at the leaf.
+     * Now let′s try to obtain its pathname.
+     */
+    path = path_alloc(&size);
+    for ( ; ; ) {
+        if (getcwd(path, size) != NULL) {
+            break;
+        } else {
+            err_ret("getcwd failed, size = %ld", (long)size);
+            size += 100;
+            if (size > MAXSZ)
+                err_quit("giving up");
+            if ((path = realloc(path, size)) == NULL)
+                err_sys("realloc error");
+        }
+    }
+    printf("length = %ldn%sn", (long)strlen(path), path);
+
+    exit(0);
+}
+
+--------------
+
+*Figure C.3* Create a deep directory tree
+
+We are not able to archive this directory, however, using =cpio=. It complains that many of the filenames are too long. In fact, =cpio= is unable to archive this directory on all four platforms. In contrast, we can archive this directory using =tar= on FreeBSD 8.0, Linux 3.2.0, and Mac OS X 10.6.8. However, we are unable to extract the directory hierarchy from the archive on Linux 3.2.0.
+
+4.17 The =/dev= directory has write permissions turned off to prevent a normal user from removing the filenames in the directory. This means that the =unlink= attempt fails.
+
+** Chapter 5
+
+
+5.2 The =fgets= function reads up through and including the next newline /or/ until the buffer is full (leaving room, of course, for the terminating null). Also, =fputs= writes everything in the buffer until it hits a null byte; it doesn't care whether a newline is in the buffer. So, if =MAXLINE= is too small, both functions still work; they're just called more often than they would be if the buffer were larger.
+
+If either of these functions removed or added the newline (as =gets= and =puts= do), we would have to ensure that our buffer was big enough for the largest line.
+
+5.3 The function call
+
+printf("");
+
+returns 0, since no characters are output.
+
+5.4 This is a common error. The return value from =getc= and =getchar= is an =int=, not a =char=. =EOF= is often defined to be --1, so if the system uses signed characters, the code normally works. But if the system uses unsigned characters, after the =EOF= returned by =getchar= is stored as an unsigned character, the character's value no longer equals --1, so the loop never terminates. The four platforms described in this book all use signed characters, so the example code works on these platforms.
+
+5.5 Call =fsync= after each call to =fflush=. The argument to =fsync= is obtained with the =fileno= function. Calling =fsync= without calling =fflush= might do nothing if all the data were still in memory buffers.
+
+5.6 Standard input and standard output are both line buffered when a program is run interactively. When =fgets= is called, standard output is flushed automatically.
+
+5.7 An implementation of =fmemopen= for BSD-based systems is shown in [[file:part0037.xhtml#app03fig04][Figure C.4]].
+
+
+
+--------------
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
+/*
+ * Our internal structure tracking a memory stream
+ */
+struct memstream
+{
+    char    *buf;   /* in-memory buffer */
+    size_t  rsize;  /* real size of buffer */
+    size_t  vsize;  /* virtual size of buffer */
+    size_t  curpos; /* current position in buffer */
+    int     flags;  /* see below */
+};
+
+/* flags */
+#define MS_READ     0x01    /* open for reading */
+#define MS_WRITE    0x02    /* open for writing */
+#define MS_APPEND   0x04    /* append to stream */
+#define MS_TRUNCATE 0x08    /* truncate the stream on open */
+#define MS_MYBUF    0x10    /* free buffer on close */
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+static int mstream_read(void *, char *, int);
+static int mstream_write(void *, const char *, int);
+static fpos_t mstream_seek(void *, fpos_t, int);
+static int mstream_close(void *);
+static int type_to_flags(const char *__restrict type);
+static off_t find_end(char *buf, size_t len);
+
+FILE *
+fmemopen(void *__restrict buf, size_t size,
+    const char *__restrict type)
+{
+    struct memstream *ms;
+    FILE *fp;
+
+    if (size == 0) {
+        errno = EINVAL;
+        return(NULL);
+    }
+    if ((ms = malloc(sizeof(struct memstream))) == NULL) {
+        errno = ENOMEM;
+        return(NULL);
+    }
+    if ((ms->flags = type_to_flags(type)) == 0) {
+        errno = EINVAL;
+        free(ms);
+        return(NULL);
+    }
+    if (buf == NULL) {
+        if ((ms->flags & (MS_READ|MS_WRITE)) !=
+          (MS_READ|MS_WRITE)) {
+            errno = EINVAL;
+            free(ms);
+            return(NULL);
+        }
+        if ((ms->buf = malloc(size)) == NULL) {
+            errno = ENOMEM;
+            free(ms);
+            return(NULL);
+        }
+        ms->rsize = size;
+        ms->flags |= MS_MYBUF;
+        ms->curpos = 0;
+    } else {
+        ms->buf = buf;
+        ms->rsize = size;
+        if (ms->flags & MS_APPEND)
+            ms->curpos = find_end(ms->buf, ms->rsize);
+        else
+            ms->curpos = 0;
+    }
+    if (ms->flags & MS_APPEND) {            /* "a" mode */
+        ms->vsize = ms->curpos;
+    } else if (ms->flags & MS_TRUNCATE) {   /* "w" mode */
+        ms->vsize = 0;
+    } else {                                /* "r" mode */
+        ms->vsize = size;
+    }
+    fp = funopen(ms, mstream_read, mstream_write,
+      mstream_seek, mstream_close);
+    if (fp == NULL) {
+        if (ms->flags & MS_MYBUF)
+            free(ms->buf);
+        free(ms);
+    }
+    return(fp);
+}
+
+static int
+type_to_flags(const char *__restrict type)
+{
+    const char *cp;
+    int flags = 0;
+
+    for (cp = type; *cp != 0; cp++) {
+        switch (*cp) {
+        case ′r′:
+            if (flags != 0)
+                return(0);  /* error */
+            flags |= MS_READ;
+            break;
+
+        case ′w′:
+            if (flags != 0)
+                return(0);  /* error */
+            flags |= MS_WRITE|MS_TRUNCATE;
+            break;
+
+        case ′a′:
+            if (flags != 0)
+                return(0);  /* error */
+            flags |= MS_APPEND;
+            break;
+
+        case ′+′:
+            if (flags == 0)
+                return(0);  /* error */
+            flags |= MS_READ|MS_WRITE;
+            break;
+
+        case ′b′:
+            if (flags == 0)
+                return(0);  /* error */
+            break;
+
+        default:
+            return(0);      /* error */
+        }
+    }
+    return(flags);
+}
+
+static off_t
+find_end(char *buf, size_t len)
+{
+    off_t off = 0;
+
+    while (off < len) {
+        if (buf[off] == 0)
+            break;
+        off++;
+    }
+    return(off);
+}
+
+static int
+mstream_read(void *cookie, char *buf, int len)
+{
+    int nr;
+    struct memstream *ms = cookie;
+
+    if (!(ms->flags & MS_READ)) {
+        errno = EBADF;
+        return(-1);
+    }
+    if (ms->curpos >= ms->vsize)
+        return(0);
+
+    /* can only read from curpos to vsize */
+    nr = MIN(len, ms->vsize - ms->curpos);
+    memcpy(buf, ms->buf + ms->curpos, nr);
+    ms->curpos += nr;
+    return(nr);
+}
+
+static int
+mstream_write(void *cookie, const char *buf, int len)
+{
+    int nw, off;
+    struct memstream *ms = cookie;
+
+    if (!(ms->flags & (MS_APPEND|MS_WRITE))) {
+        errno = EBADF;
+        return(-1);
+    }
+    if (ms->flags & MS_APPEND)
+        off = ms->vsize;
+    else
+        off = ms->curpos;
+    nw = MIN(len, ms->rsize - off);
+    memcpy(ms->buf + off, buf, nw);
+    ms->curpos = off + nw;
+    if (ms->curpos > ms->vsize) {
+        ms->vsize = ms->curpos;
+        if (((ms->flags & (MS_READ|MS_WRITE)) ==
+          (MS_READ|MS_WRITE)) && (ms->vsize < ms->rsize))
+            *(ms->buf + ms->vsize) = 0;
+    }
+    if ((ms->flags & (MS_WRITE|MS_APPEND)) &&
+      !(ms->flags & MS_READ)) {
+        if (ms->curpos < ms->rsize)
+            *(ms->buf + ms->curpos) = 0;
+        else
+            *(ms->buf + ms->rsize - 1) = 0;
+    }
+    return(nw);
+}
+
+static fpos_t
+mstream_seek(void *cookie, fpos_t pos, int whence)
+{
+    int off;
+    struct memstream *ms = cookie;
+
+    switch (whence) {
+    case SEEK_SET:
+        off = pos;
+        break;
+    case SEEK_END:
+        off = ms->vsize + pos;
+        break;
+    case SEEK_CUR:
+        off = ms->curpos + pos;
+        break;
+    }
+    if (off < 0 || off > ms->vsize) {
+        errno = EINVAL;
+        return -1;
+    }
+    ms->curpos = off;
+    return(off);
+}
+
+static int
+mstream_close(void *cookie)
+{
+    struct memstream *ms = cookie;
+
+    if (ms->flags & MS_MYBUF)
+        free(ms->buf);
+    free(ms);
+    return(0);
+}
+
+--------------
+
+*Figure C.4* Implementation of =fmemopen= for BSD systems
+
+** Chapter 6
+
+
+6.1 The functions to access the shadow password file on Linux and Solaris are discussed in [[file:part0018.xhtml#ch06lev1sec3][Section 6.3]]. We can't use the value returned in the =pw_passwd= field by the functions described in [[file:part0018.xhtml#ch06lev1sec2][Section 6.2]] to compare an encrypted password, since that field is not the encrypted password. Instead, we need to find the user's entry in the shadow file and use its encrypted password field.
+
+On FreeBSD and Mac OS X, the password file is shadowed automatically. In the =passwd= structure returned by =getpwnam= and =getpwuid= on FreeBSD 8.0, the =pw_passwd= field contains the encrypted password, but only if the caller's effective user ID is 0. On Mac OS X 10.6.8, the encrypted password is not accessible using these interfaces.
+
+6.2 The program in [[file:part0037.xhtml#app03fig05][Figure C.5]] prints the encrypted password on Linux 3.2.0 and Solaris 10. Unless this program is run with superuser permissions, the call to =getspnam= fails with an error of =EACCES=.
+
+
+
+--------------
+
+#include "apue.h"
+#include <shadow.h>
+
+int
+main(void)      /* Linux/Solaris version */
+{
+    struct spwd *ptr;
+
+    if ((ptr = getspnam("sar")) == NULL)
+        err_sys("getspnam error");
+    printf("sp_pwdp = %sn", ptr->sp_pwdp == NULL ||
+      ptr->sp_pwdp[0] == 0 ?  "(null)" : ptr->sp_pwdp);
+    exit(0);
+}
+
+--------------
+
+*Figure C.5* Print encrypted password under Linux and Solaris
+
+Under FreeBSD 8.0, the program in [[file:part0037.xhtml#app03fig06][Figure C.6]] prints the encrypted password if the program is run with superuser permissions. Otherwise, the value returned in =pw_passwd= is an asterisk. On Mac OS X 10.6.8, asterisks are printed regardless of the permissions with which it is run.
+
+
+
+--------------
+
+#include "apue.h"
+#include <pwd.h>
+
+int
+main(void)      /* FreeBSD/Mac OS X version */
+{
+    struct passwd   *ptr;
+
+    if ((ptr = getpwnam("sar")) == NULL)
+        err_sys("getpwnam error");
+    printf("pw_passwd = %sn", ptr->pw_passwd == NULL ||
+      ptr->pw_passwd[0] == 0 ?  "(null)" : ptr->pw_passwd);
+    exit(0);
+}
+
+--------------
+
+*Figure C.6* Print encrypted password under FreeBSD and Mac OS X
+
+6.5 The program shown in [[file:part0037.xhtml#app03fig07][Figure C.7]] prints the date in a format similar to the =date= command.
+
+
+
+--------------
+
+#include "apue.h"
+#include <time.h>
+
+int
+main(void)
+{
+    time_t      caltime;
+    struct tm   *tm;
+    char        line[MAXLINE];
+
+    if ((caltime = time(NULL)) == -1)
+        err_sys("time error");
+    if ((tm = localtime(&caltime)) == NULL)
+        err_sys("localtime error");
+    if (strftime(line, MAXLINE, "%a %b %d %X %Z %Yn", tm) == 0)
+        err_sys("strftime error");
+    fputs(line, stdout);
+    exit(0);
+}
+
+--------------
+
+*Figure C.7* Print the time and date in a format similar to =date=(1)
+
+Running this program gives us
+
+
+
+$ ./a.out                         author′s default is US/Eastern
+Wed Jul 25 22:58:32 EDT 2012
+$ TZ=US/Mountain ./a.out          U.S. Mountain time zone
+Wed Jul 25 20:58:32 MDT 2012
+$ TZ=Japan ./a.out                Japan
+Thu Jul 26 11:58:32 JST 2012
+
+** Chapter 7
+
+
+7.1 It appears that the return value from =printf= (the number of characters output) becomes the return value of =main=. To verify this theory, change the length of the string printed and see if the new length matches the return value. Note that not all systems exhibit this property. Also note that if you enable the ISO C extensions in =gcc=, then the return value is always 0, as required by the standard.
+
+7.2 When the program is run interactively, standard output is usually line buffered, so the actual output occurs when each newline is output. If standard output were directed to a file, however, it would probably be fully buffered, and the actual output wouldn't occur until the standard I/O cleanup is performed.
+
+7.3 On most UNIX systems, there is no way to do this. Copies of =argc= and =argv= are not kept in global variables like =environ= is.
+
+7.4 This provides a way to terminate the process when it tries to dereference a null pointer, a common C programming error.
+
+7.5 The definitions are
+
+typedef void    Exitfunc(void);
+int atexit(Exitfunc *func);
+
+7.6 =calloc= initializes the memory that it allocates to all zero bits. ISO C does not guarantee that this is the same as either a floating-point 0 or a null pointer.
+
+7.7 The heap and the stack aren't allocated until a program is executed by one of the =exec= functions (described in [[file:part0020.xhtml#ch08lev1sec10][Section 8.10]]).
+
+7.8 The executable file (=a.out=) contains symbol table information that can be helpful in debugging a =core= file. To remove this information, use the =strip=(1) command. Stripping the two =a.out= files reduces their size to 798,760 and 6,200 bytes.
+
+7.9 When shared libraries are not used, a large portion of the executable file is occupied by the standard I/O library.
+
+7.10 The code is incorrect, since it references the automatic integer =val= through a pointer after the automatic variable is no longer in existence. Automatic variables declared after the left brace that starts a compound statement disappear after the matching right brace.
+
+** Chapter 8
+
+
+8.1 To simulate the behavior of the child closing the standard output when it exits, add the following line before calling =exit= in the child:
+
+fclose(stdout);
+
+To see the effects of doing this, replace the call to =printf= with the lines
+
+
+
+i = printf("pid = %ld, glob = %d, var = %dn",
+    (long)getpid(), glob, var);
+sprintf(buf, "%dn", i);
+write(STDOUT_FILENO, buf, strlen(buf));
+
+You need to define the variables =i= and =buf= also.
+
+This assumes that the standard I/O stream =stdout= is closed when the child calls =exit=, not the file descriptor =STDOUT_FILENO=. Some versions of the standard I/O library close the file descriptor associated with standard output, which would cause the =write= to standard output to also fail. In this case, =dup= standard output to another descriptor, and use this new descriptor for the =write=.
+
+8.2 Consider [[file:part0037.xhtml#app03fig08][Figure C.8]].
+
+
+
+--------------
+
+#include "apue.h"
+
+static void f1(void), f2(void);
+
+int
+main(void)
+{
+    f1();
+    f2();
+    _exit(0);
+}
+
+static void
+f1(void)
+{
+    pid_t   pid;
+
+    if ((pid = vfork()) < 0)
+        err_sys("vfork error");
+    /* child and parent both return */
+}
+
+static void
+f2(void)
+{
+    char    buf[1000];      /* automatic variables */
+    int     i;
+
+    for (i = 0; i < sizeof(buf); i++)
+        buf[i] = 0;
+}
+
+--------------
+
+*Figure C.8* Incorrect use of =vfork=
+
+When =vfork= is called, the parent's stack pointer points to the stack frame for the =f1= function that calls =vfork=. [[file:part0037.xhtml#app03fig09][Figure C.9]] shows this. =vfork= causes the child to execute first, and the child returns from =f1=. The child then calls =f2=, and its stack frame overwrites the previous stack frame for =f1=. The child then zeros out the automatic variable =buf=, setting 1,000 bytes of the stack frame to 0. The child returns from =f2= and then calls =_exit=, but the contents of the stack beneath the stack frame for =main= have been changed. The parent then resumes after the call to =vfork= and does a return from =f1=. The return information is often stored in the stack frame, and that information has probably been modified by the child. After the parent resumes, what happens with this example depends on many implementation features of your UNIX system (where in the stack frame the return information is stored, what information in the stack frame is wiped out when the automatic variables are modified, and so on). The normal result is a =core= file, but your results may differ.
+
+[[../Images/image01515.jpeg]]
+*Figure C.9* Stack frames when =vfork= is called
+
+8.4 In [[file:part0020.xhtml#ch08fig13][Figure 8.13]], we have the parent write its output first. When the parent is done, the child writes its output, but we let the parent terminate. Whether the parent terminates or whether the child finishes its output first depends on the kernel's scheduling of the two processes (another race condition). When the parent terminates, the shell starts up the next program, and this next program can interfere with the output from the previous child.
+
+We can prevent this from happening by not letting the parent terminate until the child has also finished its output. Replace the code following the =fork= with the following:
+
+
+
+else if (pid == 0) {
+    WAIT_PARENT();          /* parent goes first */
+    charatatime("output from childn");
+    TELL_PARENT(getppid()); /* tell parent we′re done */
+} else {
+    charatatime("output from parentn");
+    TELL_CHILD(pid);        /* tell child we′re done */
+    WAIT_CHILD();           /* wait for child to finish */
+}
+
+We won't see this happen if we let the child go first, since the shell doesn't start the next program until the parent terminates.
+
+8.5 The same value (=/home/sar/bin/testinterp=) is printed for =argv[2]=. The reason is that =execlp= ends up calling =execve= with the same /pathname/ as when we call =execl= directly. Recall [[file:part0020.xhtml#ch08fig15][Figure 8.15]].
+
+8.6 The program in [[file:part0037.xhtml#app03fig10][Figure C.10]] creates a zombie.
+
+
+
+--------------
+
+#include "apue.h"
+
+#ifdef SOLARIS
+#define PSCMD   "ps -a -o pid,ppid,s,tty,comm"
+#else
+#define PSCMD   "ps -o pid,ppid,state,tty,command"
+#endif
+
+int
+main(void)
+{
+    pid_t   pid;
+
+    if ((pid = fork()) < 0)
+        err_sys("fork error");
+    else if (pid == 0)      /* child */
+        exit(0);
+
+    /* parent */
+    sleep(4);
+    system(PSCMD);
+
+    exit(0);
+}
+
+--------------
+
+*Figure C.10* Create a zombie and look at its status with =ps=
+
+Zombies are usually designated by =ps=(1) with a status of =Z=:
+
+
+
+$ ./a.out
+ PID  PPID S TT      COMMAND
+2369  2208 S pts/2   -bash
+7230  2369 S pts/2   ./a.out
+7231  7230 Z pts/2   [a.out] <defunct>
+7232  7230 S pts/2   sh -c ps -o pid,ppid,state,tty,command
+7233  7232 R pts/2   ps -o pid,ppid,state,tty,command
+
+** Chapter 9
+
+
+9.1 The =init= process learns when a terminal user logs out, because =init= is the parent of the login shell and receives the =SIGCHLD= signal when the login shell terminates.
+
+For a network login, however, =init= is not involved. Instead, the login entries in the =utmp= and =wtmp= files, and their corresponding logout entries, are usually written by the process that handles the login and detects the logout (=telnetd= in our example).
+
+** Chapter 10
+
+
+*[[file:part0022.xhtml#ch10que01][10.1]]* The program terminates the first time we send it a signal. The reason is that the =pause= function returns whenever a signal is caught.
+
+*[[file:part0022.xhtml#ch10que03][10.3]]* [[file:part0037.xhtml#app03fig11][Figure C.11]] shows the stack frames.
+
+[[../Images/image01516.jpeg]]
+*Figure C.11* Stack frames before and after =longjmp=
+
+The =longjmp= from =sig_alrm= back to =sleep2= effectively aborts the call to =sig_int=. From this point, =sleep2= returns to main (recall [[file:part0022.xhtml#ch10fig08][Figure 10.8]]).
+
+*[[file:part0022.xhtml#ch10que04][10.4]]* We again have a race condition, this time between the first call to =alarm= and the call to =setjmp=. If the process is blocked by the kernel between these two function calls, the alarm goes off, the signal handler is called, and =longjmp= is called. But since =setjmp= was never called, the buffer =env_alrm= is not set. The operation of =longjmp= is undefined if its jump buffer has not been initialized by =setjmp=.
+
+*[[file:part0022.xhtml#ch10que05][10.5]]* See “Implementing Software Timers” by Don Libes (/C Users Journal/, vol. 8, no. 11, Nov. 1990) for an example. A copy of this paper is available online at =http://www.kohala.com/start/libes.timers.txt=.
+
+*[[file:part0022.xhtml#ch10que07][10.7]]* If we simply called =_exit=, the termination status of the process would not show that it was terminated by the =SIGABRT= signal.
+
+*[[file:part0022.xhtml#ch10que08][10.8]]* If the signal was sent by a process owned by some other user, the process has to be set-user-ID to either root or to the owner of the receiving process, or the =kill= attempt won't work. Therefore, the real user ID provides more information to the receiver of the signal.
+
+*[[file:part0022.xhtml#ch10que10][10.10]]* On one system used by the author, the value for the number of seconds increased by 1 about every 60--90 minutes. This skew occurs because each call to =sleep= schedules an event for a time in the future, but is not awakened exactly when that event occurs (because of CPU scheduling). In addition, a finite amount of time is required for our process to start running and call =sleep= again.
+
+A program such as the =cron= daemon has to fetch the current time every minute, as well as to set its first sleep period so that it wakes up at the beginning of the next minute. (Convert the current time to the local time and look at the =tm_sec= value.) Every minute, it sets the next sleep period so that it'll wake up at the next minute. Most of the calls will probably be =sleep(60)=, with an occasional =sleep(59)= to resynchronize with the next minute. But if at some point the process takes a long time executing commands or if the system gets heavily loaded and scheduling delays hold up the process, the sleep value can be much less than 60.
+
+*[[file:part0022.xhtml#ch10que11][10.11]]* Under Linux 3.2.0, Mac OS X 10.6.8, and Solaris 10, the signal handler for =SIGXFSZ= is never called. But =write= returns a count of 24 as soon as the file's size reaches 1,024 bytes.
+
+When the file's size has reached 1,000 bytes under FreeBSD 8.0, the signal handler is called on the next attempt to write 100 bytes, and the =write= call returns --1 with =errno= set to =EFBIG= (“File too big”).
+
+On all four platforms, if we attempt an additional =write= at the current file offset (the end of the file), we will receive =SIGXFSZ= and =write= will fail, returning --1 with =errno= set to =EFBIG=.
+
+*[[file:part0022.xhtml#ch10que12][10.12]]* The results depend on the implementation of the standard I/O library: how the =fwrite= function handles an interrupted =write=.
+
+On Linux 3.2.0, for example, when we use the =fwrite= function to write a large buffer, the =fwrite= function calls =write= directly for the same number of bytes. While in the middle of the =write= system call, the alarm fires, but we don't see the signal until the write completes. It appears as if the kernel is blocking the signal while we are in the middle of the =write= system call.
+
+In contrast, on Solaris 10, the =fwrite= function calls =write= in 8 KB increments until the entire amount is written. When the alarm fires, it is caught, interrupting the call to =fwrite=. After we return from the signal handler, we return to the loop inside the =fwrite= function and continue writing in 8 KB increments.
+
+** Chapter 11
+
+
+*[[file:part0023.xhtml#ch11que01][11.1]]* A version of the program that allocates the memory dynamically instead of using an automatic variable is shown in [[file:part0037.xhtml#app03fig12][Figure C.12]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <pthread.h>
+
+struct foo {
+    int a, b, c, d;
+};
+
+void
+printfoo(const char *s, const struct foo *fp)
+{
+    fputs(s, stdout);
+    printf("  structure at 0x%lxn", (unsigned long)fp);
+    printf("  foo.a = %dn", fp->a);
+    printf("  foo.b = %dn", fp->b);
+    printf("  foo.c = %dn", fp->c);
+    printf("  foo.d = %dn", fp->d);
+}
+
+void *
+thr_fn1(void *arg)
+{
+    struct foo *fp;
+    if ((fp = malloc(sizeof(struct foo))) == NULL)
+        err_sys("can′t allocate memory");
+    fp->a = 1;
+    fp->b = 2;
+    fp->c = 3;
+    fp->d = 4;
+    printfoo("thread:n", fp);
+    return((void *)fp);
+}
+
+int
+main(void)
+{
+    int err;
+    pthread_t tid1;
+    struct foo *fp;
+
+    err = pthread_create(&tid1, NULL, thr_fn1, NULL);
+    if (err != 0)
+        err_exit(err, "can′t create thread 1");
+    err = pthread_join(tid1, (void *)&fp);
+    if (err != 0)
+        err_exit(err, "can′t join with thread 1");
+    printfoo("parent:n", fp);
+    exit(0);
+}
+
+--------------
+
+*Figure C.12* Correct use of thread return value
+
+*[[file:part0023.xhtml#ch11que02][11.2]]* To change the thread ID of a pending job, the reader--writer lock must be held in write mode to prevent anyone from searching the list while the ID is being changed. The problem with the way the interfaces are currently defined is that the ID of a job can change between the time that the job is found with =job_find= and the job is removed from the list by calling =job_remove=. This problem can be solved by embedding a reference count and a mutex inside the =job= structure and having =job_find= increment the reference count. The code that changes the ID can then avoid any job in the list that has a nonzero reference count.
+
+*[[file:part0023.xhtml#ch11que03][11.3]]* First of all, the list is protected by a reader--writer lock, but the condition variable needs a mutex to protect the condition. Second, the condition each thread should wait to be satisfied is that there is a job for it to process, so we need to create a per-thread data structure to represent this condition. Alternatively, we can embed the mutex and condition variable in the =queue= structure, but this means that all worker threads will wait on the same condition. If there are many worker threads, we can run into a /thundering herd/ problem, whereby many threads are awakened without work to do, resulting in a waste of CPU resources and increased lock contention.
+
+*[[file:part0023.xhtml#ch11que04][11.4]]* It depends on the circumstances. In general, both can be correct, but each alternative has drawbacks. In the first sequence, the waiting threads will be scheduled to run after we call =pthread_cond_broadcast=. If the program is running on a multiprocessor, some threads will run and immediately block because we are still holding the mutex (recall that =pthread_cond_wait= returns with the mutex held). In the second sequence, a running thread can acquire the mutex between steps 3 and 4, invalidate the condition, and release the mutex. Then, when we call =pthread_cond_broadcast=, the condition will no longer be true, and the threads will run needlessly. This is why the awakened threads must recheck the condition and not assume that it is true merely because =pthread_cond_wait= returned.
+
+** Chapter 12
+
+
+*[[file:part0024.xhtml#ch12que01][12.1]]* This is not a multithreading problem, as one might first guess. The standard I/O routines are indeed thread-safe. When we call =fork=, each process gets a copy of the standard I/O data structures. When we run the program with standard output attached to a terminal, the output is line buffered, so every time we print a line, the standard I/O library writes it to our terminal. However, if we redirect the standard output to a file, then the standard output is fully buffered. The output is written when the buffer fills or the process closes the stream. When we =fork= in this example, the buffer contains several printed lines not yet written, so when the parent and the child finally flush their copies of the buffer, the initial duplicate contents are written to the file.
+
+*[[file:part0024.xhtml#ch12que03][12.3]]* Theoretically, if we arrange for all signals to be blocked when the signal handler runs, we should be able to make a function async-signal safe. The problem is that we don't know whether any of the functions we call might unmask a signal that we've blocked, thereby making it possible for the function to be reentered through another signal handler.
+
+*[[file:part0024.xhtml#ch12que04][12.4]]* On FreeBSD 8.0, the program drops core. With =gdb=, we are able to see that the program initialization calls pthread functions, which call =getenv= to find the value of the =LIBPTHREAD_SPINLOOPS= and =LIBPTHREAD_YIELDLOOPS= environment variables. However, our thread-safe version of =getenv= calls back into the pthread library while it is in an intermediate, inconsistent state. In addition, the thread initialization functions call =malloc=, which, in turn, call =getenv= to find the value of the =MALLOC_OPTIONS= environment variable.
+
+To get around this problem, we could make the reasonable assumption that program start-up is single threaded, and use a flag to indicate whether the thread initialization had been completed by our version of =getenv=. While this flag is false, our version of =getenv= can operate as the non-reentrant version does (and avoid all calls to pthread functions and =malloc=). Then we could provide a separate initialization function to call =pthread_once=, instead of calling it from inside =getenv=. This requires that the program call our initialization function before calling =getenv=. This solves our problem, because this can't be done until the program start-up initialization completes. After the program calls our initialization function, our version of =getenv= operates in a thread-safe manner.
+
+*[[file:part0024.xhtml#ch12que05][12.5]]* We still need =fork= if we want to run a program from within another program (i.e., before calling =exec=).
+
+*[[file:part0024.xhtml#ch12que06][12.6]]* [[file:part0037.xhtml#app03fig13][Figure C.13]] shows a thread-safe =sleep= implementation that uses =select= to delay for the specified amount of time. It is thread-safe because it doesn't use any unprotected global or static data and calls only other thread-safe functions.
+
+
+
+--------------
+
+#include <unistd.h>
+#include <time.h>
+#include <sys/select.h>
+
+unsigned
+sleep(unsigned seconds)
+{
+    int n;
+    unsigned slept;
+    time_t start, end;
+    struct timeval tv;
+
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    time(&start);
+    n = select(0, NULL, NULL, NULL, &tv);
+    if (n == 0)
+        return(0);
+    time(&end);
+    slept = end - start;
+    if (slept >= seconds)
+        return(0);
+    return(seconds - slept);
+}
+
+--------------
+
+*Figure C.13* A thread-safe implementation of =sleep=
+
+*[[file:part0024.xhtml#ch12que07][12.7]]* The implementation of a condition variable most likely uses a mutex to protect its internal structure. Because this is an implementation detail and therefore hidden, there is no portable way for us to acquire and release the lock in the fork handlers. Since we can't determine the state of the internal lock in a condition variable after calling =fork=, it is unsafe for us to use the condition variable in the child process.
+
+** Chapter 13
+
+
+*[[file:part0025.xhtml#ch13que01][13.1]]* If it calls =chroot=, the process will not be able to open =/dev/log=. The solution is for the daemon to call =openlog= with an /option/ of =LOG_NDELAY=, before calling =chroot=. This opens the special device file (the UNIX domain datagram socket), yielding a descriptor that is still valid, even after a call to =chroot=. This scenario is encountered in daemons, such as =ftpd= (the File Transfer Protocol daemon), that specifically call =chroot= for security reasons but still need to call =syslog= to log error conditions.
+
+*[[file:part0025.xhtml#ch13que03][13.3]]* [[file:part0037.xhtml#app03fig14][Figure C.14]] shows a solution.
+
+
+
+--------------
+
+#include "apue.h"
+
+int
+main(void)
+{
+    FILE *fp;
+    char *p;
+
+    daemonize("getlog");
+    p = getlogin();
+    fp = fopen("/tmp/getlog.out", "w");
+    if (fp != NULL) {
+        if (p == NULL)
+            fprintf(fp, "no login namen");
+        else
+            fprintf(fp, "login name: %sn", p);
+    }
+    exit(0);
+}
+
+--------------
+
+*Figure C.14* Call =daemonize= and then obtain login name
+
+The results depend on the platform. Recall that =daemonize= closes all open file descriptors and then reopens the first three to =/dev/null=. This means that the process won't have a controlling terminal, so =getlogin= won't be able to look in the =utmp= file for the process's login entry. Thus, on Linux 3.2.0 and Solaris 10, we find that a daemon has no login name.
+
+Under FreeBSD 8.0 and Mac OS X 10.6.8, however, the login name is maintained in the process table and copied across a =fork=. This means that the process can always get the login name, unless the parent didn't have one to start out (such as =init= when the system is bootstrapped).
+
+** Chapter 14
+
+
+*[[file:part0026.xhtml#ch14que01][14.1]]* The test program is shown in [[file:part0037.xhtml#app03fig15][Figure C.15]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <fcntl.h>
+#include <errno.h>
+
+void
+sigint(int signo)
+{
+}
+int
+main(void)
+{
+    pid_t pid1, pid2, pid3;
+    int fd;
+
+    setbuf(stdout, NULL);
+    signal_intr(SIGINT, sigint);
+
+    /*
+     * Create a file.
+     */
+    if ((fd = open("lockfile", O_RDWR|O_CREAT, 0666)) < 0)
+        err_sys("can′t open/create lockfile");
+
+    /*
+     * Read-lock the file.
+     */
+    if ((pid1 = fork()) < 0) {
+        err_sys("fork failed");
+    } else if (pid1 == 0) { /* child */
+        if (lock_reg(fd, F_SETLK, F_RDLCK, 0, SEEK_SET, 0) < 0)
+            err_sys("child 1: can′t read-lock file");
+        printf("child 1: obtained read lock on filen");
+        pause();
+        printf("child 1: exit after pausen");
+        exit(0);
+    } else {        /* parent */
+        sleep(2);
+    }
+
+    /*
+     * Parent continues ... read-lock the file again.
+     */
+    if ((pid2 = fork()) < 0) {
+        err_sys("fork failed");
+    } else if (pid2 == 0) { /* child */
+        if (lock_reg(fd, F_SETLK, F_RDLCK, 0, SEEK_SET, 0) < 0)
+            err_sys("child 2: can′t read-lock file");
+        printf("child 2: obtained read lock on filen");
+        pause();
+        printf("child 2: exit after pausen");
+        exit(0);
+    } else {        /* parent */
+        sleep(2);
+    }
+
+    /*
+     * Parent continues ... block while trying to write-lock
+     * the file.
+     */
+    if ((pid3 = fork()) < 0) {
+        err_sys("fork failed");
+    } else if (pid3 == 0) { /* child */
+        if (lock_reg(fd, F_SETLK, F_WRLCK, 0, SEEK_SET, 0) < 0)
+            printf("child 3: can′t set write lock: %sn",
+              strerror(errno));
+        printf("child 3 about to block in write-lock...n");
+        if (lock_reg(fd, F_SETLKW, F_WRLCK, 0, SEEK_SET, 0) < 0)
+            err_sys("child 3: can′t write-lock file");
+        printf("child 3 returned and got write lock????n");
+        pause();
+        printf("child 3: exit after pausen");
+        exit(0);
+    } else {        /* parent */
+        sleep(2);
+    }
+
+    /*
+     * See if a pending write lock will block the next
+     * read-lock attempt.
+     */
+    if (lock_reg(fd, F_SETLK, F_RDLCK, 0, SEEK_SET, 0) < 0)
+        printf("parent: can′t set read lock: %sn",
+          strerror(errno));
+    else
+        printf("parent: obtained additional read lock while"
+          " write lock is pendingn");
+    printf("killing child 1...n");
+    kill(pid1, SIGINT);
+    printf("killing child 2...n");
+    kill(pid2, SIGINT);
+    printf("killing child 3...n");
+    kill(pid3, SIGINT);
+    exit(0);
+}
+
+--------------
+
+*Figure C.15* Determine record-locking behavior
+
+On FreeBSD 8.0, Linux 3.2.0, and Mac OS X 10.6.8, the behavior is the same: additional readers can starve pending writers. Running the program gives us
+
+
+
+child 1: obtained read lock on file
+child 2: obtained read lock on file
+child 3: can′t set write lock: Resource temporarily unavailable
+child 3 about to block in write-lock...
+parent: obtained additional read lock while write lock is pending
+killing child 1...
+child 1: exit after pause
+killing child 2...
+child 2: exit after pause
+killing child 3...
+child 3: can′t write-lock file: Interrupted system call
+
+On Solaris 10, readers don't starve waiting writers. In this case, the parent is unable to obtain a read lock because there is a process waiting for a write lock.
+
+*[[file:part0026.xhtml#ch14que02][14.2]]* Most systems define the =fd_set= data type to be a structure that contains a single member: an array of long integers. One bit in this array corresponds to each descriptor. The four =FD_= macros then manipulate this array of longs, turning specific bits on and off and testing specific bits.
+
+One reason that the data type is defined to be a structure containing an array and not simply an array is to allow variables of type =fd_set= to be assigned to one another with the C assignment statement.
+
+*[[file:part0026.xhtml#ch14que03][14.3]]* In the good ol' days, most systems allowed us to define the constant =FD_SETSIZE= before including the header =<sys/select.h>=. For example, we could write
+
+#define FD_SETSIZE  2048
+#include <sys/select.h>
+
+to define the =fd_set= data type to accommodate 2,048 descriptors. Unfortunately, things aren't that simple anymore. To use this technique with contemporary systems, we need to do several things:
+
+*1.* Before we include any header files, we need to define whatever symbol prevents us from including =<sys/select.h>=. Some systems might protect the definition of the =fd_set= type with a separate symbol. We need to define this, too.
+
+For example, on FreeBSD 8.0, we need to define =_SYS_SELECT_H_= to prevent the inclusion of =<sys/select.h>= and we need to define =_FD_SET= to prevent the inclusion of the definition for the =fd_set= data type.
+
+*2.* Sometimes, for compatibility with older applications, =<sys/types.h>= defines the size of the =fd_set=, so we need to include it first, then undefine =FD_SETSIZE=. Note that some systems use =__FD_SETSIZE= instead.
+
+*3.* We need to redefine =FD_SETSIZE= (or=__FD_SETSIZE=) to the maximum file descriptor number we want to be able to use with =select=.
+
+*4.* We need to undefine the symbols we defined in step 1.
+
+*5.* Finally, we can include =<sys/select.h>=.
+
+Before we run the program, we need to configure the system to allow us to open as many file descriptors as we might need so that we can actually make use of =FD_SETSIZE= file descriptors.
+
+*[[file:part0026.xhtml#ch14que04][14.4]]* The following table lists the functions that do similar things.
+
+--------------
+
+FD_ZERO    sigemptyset
+FD_SET    sigaddset
+FD_CLR    sigdelset
+FD_ISSET    sigismember
+
+There is not an =FD_xxx= function that corresponds to =sigfillset=. With signal sets, the pointer to the set is always the first argument, and the signal number is the second argument. With descriptor sets, the descriptor number is the first argument, and the pointer to the set is the next argument.
+
+*[[file:part0026.xhtml#ch14que05][14.5]]* [[file:part0037.xhtml#app03fig16][Figure C.16]] shows an implementation using =select=.
+
+
+
+--------------
+
+#include "apue.h"
+#include <sys/select.h>
+
+void
+sleep_us(unsigned int nusecs)
+{
+    struct timeval  tval;
+
+    tval.tv_sec = nusecs / 1000000;
+    tval.tv_usec = nusecs % 1000000;
+    select(0, NULL, NULL, NULL, &tval);
+}
+
+--------------
+
+*Figure C.16* Implementation of =sleep_us= using =select=
+
+[[file:part0037.xhtml#app03fig17][Figure C.17]] shows an implementation using =poll=.
+
+
+
+--------------
+
+#include <poll.h>
+
+void
+sleep_us(unsigned int nusecs)
+{
+    struct pollfd   dummy;
+    int             timeout;
+
+    if ((timeout = nusecs / 1000) <= 0)
+        timeout = 1;
+    poll(&dummy, 0, timeout);
+}
+
+--------------
+
+*Figure C.17* Implementation of =sleep_us= using =poll=
+
+As the BSD =usleep=(3) manual page states, =usleep= uses the =nanosleep= function, which doesn't interfere with timers set by the calling process.
+
+*[[file:part0026.xhtml#ch14que06][14.6]]* No. What we would like to do is have =TELL_WAIT= create a temporary file and use 1 byte for the parent's lock and 1 byte for the child's lock. =WAIT_CHILD= would have the parent wait to obtain a lock on the child's byte, and =TELL_PARENT= would have the child release the lock on the child's byte. The problem, however, is that calling =fork= releases all the locks in the child, so the child can't start off with any locks of its own.
+
+*[[file:part0026.xhtml#ch14que07][14.7]]* A solution is shown in [[file:part0037.xhtml#app03fig18][Figure C.18]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <fcntl.h>
+
+int
+main(void)
+{
+    int i, n;
+    int fd[2];
+
+    if (pipe(fd) < 0)
+        err_sys("pipe error");
+    set_fl(fd[1], O_NONBLOCK);
+
+    /* write 1 byte at a time until pipe is full */
+    for (n = 0; ; n++) {
+        if ((i = write(fd[1], "a", 1)) != 1) {
+            printf("write ret %d, ", i);
+            break;
+        }
+    }
+    printf("pipe capacity = %dn", n);
+    exit(0);
+}
+
+--------------
+
+*Figure C.18* Calculation of pipe capacity using nonblocking writes
+
+The following table shows the values calculated for our four platforms.
+
+[[../Images/image01517.jpeg]]
+
+These values can differ from the corresponding =PIPE_BUF= values, because =PIPE_BUF= is defined to be the maximum amount of data that can be written to a pipe /atomically/. Here, we calculate the amount of data that a pipe can hold independent of any atomicity constraints.
+
+*[[file:part0026.xhtml#ch14que10][14.10]]* Whether the program in [[file:part0026.xhtml#ch14fig27][Figure 14.27]] updates the last-access time for the input file depends on the operating system and the type of file system in which the file resides. On all four platforms, the last-access time is updated when the file resides in the default file system type for the given operating system.
+
+** Chapter 15
+
+
+*[[file:part0027.xhtml#ch15que01][15.1]]* If the write end of the pipe is never closed, the reader never sees an end of file. The pager program blocks forever reading from its standard input.
+
+*[[file:part0027.xhtml#ch15que02][15.2]]* The parent terminates right after writing the last line to the pipe. The read end of the pipe is automatically closed when the parent terminates. But the parent is probably running ahead of the child by one pipe buffer, since the child (the pager program) is waiting for us to look at a page of output. If we're running a shell, such as the Korn shell, with interactive command-line editing enabled, the shell probably changes the terminal mode when our parent terminates and the shell prints a prompt. This undoubtedly interferes with the pager program, which has also modified the terminal mode. (Most pager programs set the terminal to noncanonical mode when awaiting input to proceed to the next page.)
+
+*[[file:part0027.xhtml#ch15que03][15.3]]* The =popen= function returns a file pointer because the shell is executed. But the shell can't execute the nonexistent command, so it prints
+
+sh: line 1: ./a.out: No such file or directory
+
+on the standard error and terminates with an exit status of 127 (although the value depends on the type of shell). =pclose= returns the termination status of the command as it is returned by =waitpid=.
+
+*[[file:part0027.xhtml#ch15que04][15.4]]* When the parent terminates, look at its termination status with the shell. For the Bourne shell, Bourne-again shell, and Korn shell, the command is =echo $?=. The number printed is 128 plus the signal number.
+
+*[[file:part0027.xhtml#ch15que05][15.5]]* First add the declaration
+
+FILE    *fpin, *fpout;
+
+Then use =fdopen= to associate the pipe descriptors with a standard I/O stream, and set the streams to be line buffered. Do this before the =while= loop that reads from standard input:
+
+
+
+if ((fpin = fdopen(fd2[0], "r")) == NULL)
+    err_sys("fdopen error");
+if ((fpout = fdopen(fd1[1], "w")) == NULL)
+    err_sys("fdopen error");
+if (setvbuf(fpin, NULL, _IOLBF, 0) < 0)
+    err_sys("setvbuf error");
+if (setvbuf(fpout, NULL, _IOLBF, 0) < 0)
+    err_sys("setvbuf error");
+
+The =write= and =read= in the =while= loop are replaced with
+
+
+
+if (fputs(line, fpout) == EOF)
+    err_sys("fputs error to pipe");
+if (fgets(line, MAXLINE, fpin) == NULL) {
+    err_msg("child closed pipe");
+    break;
+}
+
+*[[file:part0027.xhtml#ch15que06][15.6]]* The =system= function calls =wait=, and the first child to terminate is the child generated by =popen=. Since that's not the child that =system= created, it calls =wait= again and blocks until the =sleep= is done. Then =system= returns. When =pclose= calls =wait=, an error is returned, since there are no more children to =wait= for. Then =pclose= returns an error.
+
+*[[file:part0027.xhtml#ch15que07][15.7]]* Although the details vary by platform (see [[file:part0037.xhtml#app03fig19][Figure C.19]]), =select= indicates that the descriptor is readable. After all the data has been read, =read= returns 0 to indicate the end of file. But with =poll=, the =POLLHUP= event is returned, and this can happen while there is still data to be read. Once we have read all the data, however, =read= returns 0 to indicate the end of file. After all the data has been read, the =POLLIN= event is not returned, even though we need to issue a =read= to receive the end-of-file notification (the return value of 0).
+
+[[../Images/image01518.jpeg]]
+*Figure C.19* Pipe behavior with =select= and =poll=
+
+The conditions shown in [[file:part0037.xhtml#app03fig19][Figure C.19]] include R (readable), W (writable), E (exception), HUP (hangup), ERR (error), and INV (invalid file descriptor). With an output descriptor that refers to a pipe that has been closed by the reader, =select= indicates that the descriptor is writable. But when we call =write=, the =SIGPIPE= signal is generated. If we either ignore this signal or return from its signal handler, =write= fails with =errno= set to =EPIPE=. With =poll=, however, the behavior varies by platform.
+
+*[[file:part0027.xhtml#ch15que08][15.8]]* Anything written by the child to standard error appears wherever the parent's standard error would appear. To send standard error back to the parent, include the shell redirection =2>&1= in the /cmdstring/.
+
+*[[file:part0027.xhtml#ch15que09][15.9]]* The =popen= function =fork=s a child, and the child executes the shell. The shell in turn calls =fork=, and the child of the shell executes the command string. When /cmdstring/ terminates, the shell is waiting for this to happen. The shell then exits, which is what the =waitpid= in =pclose= is waiting for.
+
+*[[file:part0027.xhtml#ch15que10][15.10]]* The trick is to =open= the FIFO twice: once for reading and once for writing. We never use the descriptor that is opened for writing, but leaving that descriptor open prevents an end of file from being generated when the number of clients goes from 1 to 0. Opening the FIFO twice requires some care, as a nonblocking =open= is required. We have to do a nonblocking, read-only =open= first, followed by a blocking =open= for write-only. (If we tried a nonblocking =open= for write-only first, it would return an error.) We then turn off nonblocking for the read descriptor. [[file:part0037.xhtml#app03fig20][Figure C.20]] shows the code for this.
+
+
+
+--------------
+
+#include "apue.h"
+#include <fcntl.h>
+
+#define FIFO    "temp.fifo"
+
+int
+main(void)
+{
+    int     fdread, fdwrite;
+
+    unlink(FIFO);
+    if (mkfifo(FIFO, FILE_MODE) < 0)
+        err_sys("mkfifo error");
+    if ((fdread = open(FIFO, O_RDONLY | O_NONBLOCK)) < 0)
+        err_sys("open error for reading");
+    if ((fdwrite = open(FIFO, O_WRONLY)) < 0)
+        err_sys("open error for writing");
+    clr_fl(fdread, O_NONBLOCK);
+    exit(0);
+}
+
+--------------
+
+*Figure C.20* Opening a FIFO for reading and writing, without blocking
+
+*[[file:part0027.xhtml#ch15que11][15.11]]* Randomly reading a message from an active queue would interfere with the client--server protocol, as either a client request or a server's response would be lost. To read the queue, all that is needed is for the process to know the identifier for the queue and for the queue to allow world-read access.
+
+*[[file:part0027.xhtml#ch15que13][15.13]]* We never store actual addresses in a shared memory segment, since it's possible for the server and all the clients to attach the segment at different addresses. Instead, when a linked list is built in a shared memory segment, the list pointers should be stored as offsets to other objects in the shared memory segment. These offsets are formed by subtracting the start of the shared memory segment from the actual address of the object.
+
+*[[file:part0027.xhtml#ch15que14][15.14]]* [[file:part0037.xhtml#app03fig21][Figure C.21]] shows the relevant events.
+
+[[../Images/image01519.jpeg]]
+*Figure C.21* Alternation between parent and child in [[file:part0027.xhtml#ch15fig33][Figure 15.33]]
+
+** Chapter 16
+
+
+*[[file:part0028.xhtml#ch16que01][16.1]]* [[file:part0037.xhtml#app03fig22][Figure C.22]] shows a program that prints the system's byte order.
+
+
+
+--------------
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <inttypes.h>
+
+int
+main(void)
+{
+    uint32_t        i = 0x04030201;
+    unsigned char   *cp = (unsigned char *)&i;
+
+    if (*cp == 1)
+        printf("little-endiann");
+    else if (*cp == 4)
+        printf("big-endiann");
+    else
+        printf("who knows?n");
+    exit(0);
+}
+
+--------------
+
+*Figure C.22* Determine byte order on system
+
+*[[file:part0028.xhtml#ch16que03][16.3]]* For each endpoint we will be listening on, we need to bind the proper address and record an entry in an =fd_set= structure corresponding to each file descriptor. We will use =select= to wait for connect requests to arrive on multiple endpoints. Recall from [[file:part0028.xhtml#ch16lev1sec4][Section 16.4]] that a passive endpoint will appear to be readable when a connect request arrives on it. When a connect request does arrive, we will accept the request and process it as before.
+
+*[[file:part0028.xhtml#ch16que05][16.5]]* In the =main= procedure, we need to arrange to catch =SIGCHLD= by calling our =signal= function ([[file:part0022.xhtml#ch10fig18][Figure 10.18]]), which will use =sigaction= to install the handler specifying the restartable system call option. Next, we need to remove the call to =waitpid= from our =serve= function. After =fork=ing the child to service the request, the parent closes the new file descriptor and resumes listening for additional connect requests. Finally, we need a signal handler for =SIGCHLD=, as follows:
+
+
+
+void
+sigchld(int signo)
+{
+    while (waitpid((pid_t)-1, NULL, WNOHANG) > 0)
+        ;
+}
+
+*[[file:part0028.xhtml#ch16que06][16.6]]* To enable asynchronous socket I/O, we need to establish socket ownership using the =F_SETOWN fcntl= command, and then enable asynchronous signaling using the =FIOASYNC ioctl= command. To disable asynchronous socket I/O, we simply need to disable asynchronous signaling. The reason we mix =fcntl= and =ioctl= commands is to find the methods that are most portable. The code is shown in [[file:part0037.xhtml#app03fig23][Figure C.23]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#if defined(BSD) || defined(MACOS) || defined(SOLARIS)
+#include <sys/filio.h>
+#endif
+
+int
+setasync(int sockfd)
+{
+    int n;
+
+    if (fcntl(sockfd, F_SETOWN, getpid()) < 0)
+        return(-1);
+    n = 1;
+    if (ioctl(sockfd, FIOASYNC, &n) < 0)
+        return(-1);
+    return(0);
+}
+
+int
+clrasync(int sockfd)
+{
+    int n;
+
+    n = 0;
+    if (ioctl(sockfd, FIOASYNC, &n) < 0)
+        return(-1);
+    return(0);
+}
+
+--------------
+
+*Figure C.23* Enable and disable asynchronous socket I/O
+
+** Chapter 17
+
+
+*[[file:part0029.xhtml#ch17que01][17.1]]* Regular pipes provide a byte stream interface. To detect message boundaries, we'd have to add a header to each message to indicate the length. But this still involves two extra copy operations: one to write to the pipe and one to read from the pipe. A more efficient approach is to use the pipe only to signal the main thread that a new message is available. We can use a single byte for this purpose. With this approach, we need to move the =mymesg= structure to the =threadinfo= structure and use a mutex and a condition variable to prevent the helper thread from reusing the =mymesg= structure until the main thread is done with it. The solution is shown in [[file:part0037.xhtml#app03fig24][Figure C.24]].
+
+
+
+--------------
+
+#include "apue.h"
+#include <poll.h>
+#include <pthread.h>
+#include <sys/msg.h>
+#include <sys/socket.h>
+
+#define NQ      3       /* number of queues */
+#define MAXMSZ  512     /* maximum message size */
+#define KEY     0x123   /* key for first message queue */
+
+struct mymesg {
+    long        mtype;
+    char        mtext[MAXMSZ+1];
+};
+
+struct threadinfo {
+    int             qid;
+    int             fd;
+    int             len;
+    pthread_mutex_t mutex;
+    pthread_cond_t  ready;
+    struct mymesg   m;
+};
+void *
+helper(void *arg)
+{
+    int                 n;
+    struct threadinfo   *tip = arg;
+
+    for(;;) {
+        memset(&tip->m, 0, sizeof(struct mymsg));
+        if ((n = msgrcv(tip->qid, &tip->m, MAXMSZ, 0,
+          MSG_NOERROR)) < 0)
+            err_sys("msgrcv error");
+        tip->len = n;
+        pthread_mutex_lock(&tip->mutex);
+        if (write(tip->fd, "a", sizeof(char)) < 0)
+            err_sys("write error");
+        pthread_cond_wait(&tip->ready, &tip->mutex);
+        pthread_mutex_unlock(&tip->mutex);
+    }
+}
+
+int
+main()
+{
+    char                c;
+    int                 i, n, err;
+    int                 fd[2];
+    int                 qid[NQ];
+    struct pollfd       pfd[NQ];
+    struct threadinfo   ti[NQ];
+    pthread_t           tid[NQ];
+
+    for (i = 0; i < NQ; i++) {
+        if ((qid[i] = msgget((KEY+i), IPC_CREAT|0666)) < 0)
+            err_sys("msgget error");
+
+        printf("queue ID %d is %dn", i, qid[i]);
+
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, fd) < 0)
+            err_sys("socketpair error");
+        pfd[i].fd = fd[0];
+        pfd[i].events = POLLIN;
+        ti[i].qid = qid[i];
+        ti[i].fd = fd[1];
+        if (pthread_cond_init(&ti[i].ready, NULL) != 0)
+            err_sys("pthread_cond_init error");
+        if (pthread_mutex_init(&ti[i].mutex, NULL) != 0)
+            err_sys("pthread_mutex_init error");
+        if ((err = pthread_create(&tid[i], NULL, helper,
+          &ti[i])) != 0)
+            err_exit(err, "pthread_create error");
+    }
+
+    for (;;) {
+        if (poll(pfd, NQ, -1) < 0)
+            err_sys("poll error");
+        for (i = 0; i < NQ; i++) {
+            if (pfd[i].revents & POLLIN) {
+                if ((n = read(pfd[i].fd, &c, sizeof(char))) < 0)
+                    err_sys("read error");
+                ti[i].m.mtext[ti[i].len] = 0;
+                printf("queue id %d, message %sn", qid[i],
+                  ti[i].m.mtext);
+                pthread_mutex_lock(&ti[i].mutex);
+                pthread_cond_signal(&ti[i].ready);
+                pthread_mutex_unlock(&ti[i].mutex);
+            }
+        }
+    }
+
+    exit(0);
+}
+
+--------------
+
+*Figure C.24* Poll for XSI messages using pipes
+
+*[[file:part0029.xhtml#ch17que03][17.3]]* A /declaration/ specifies the attributes (such as the data type) of a set of identifiers. If the declaration also causes storage to be allocated, it is called a /definition/.
+
+In the =opend.h= header, we declare the three global variables with the =extern= storage class. These declarations do not cause storage to be allocated for the variables. In the =main.c= file, we define the three global variables. Sometimes, we'll also initialize a global variable when we define it, but we typically let the C default apply.
+
+*[[file:part0029.xhtml#ch17que05][17.5]]* Both =select= and =poll= return the number of ready descriptors as the value of the function. The loop that goes through the =client= array can terminate when the number of ready descriptors has been processed.
+
+*[[file:part0029.xhtml#ch17que06][17.6]]* The first problem with the proposed solution is that there is a race between the call to =stat= and the call to =unlink= where the file can change. The second problem is that if the name is a symbolic link pointing to the UNIX domain socket file, then =stat= will report that the name is a socket (recall that the =stat= function follows symbolic links), but when we call =unlink=, we will actually remove the symbolic link instead of the socket file. To solve this problem, we should use =lstat= instead of =stat=, but this doesn't solve the first problem.
+
+*[[file:part0029.xhtml#ch17que07][17.7]]* The first option is to send both file descriptors in one control message. Each file descriptor is stored in adjacent memory locations. The following code shows this:
+
+
+
+struct msghdr msg;
+struct cmsghdr *cmptr;
+int *ip;
+if ((cmptr = calloc(1, CMSG_LEN(2*sizeof(int)))) == NULL)
+     err_sys("calloc error");
+msg.msg_control = cmptr;
+msg.msg_controllen = CMSG_LEN(2*sizeof(int));
+/* continue initializing msghdr... */
+cmptr->cmsg_len = CMSG_LEN(2*sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+ip = (int *)CMSG_DATA(cmptr);
+*ip++ = fd1;
+*ip = fd2;
+
+This approach works on all four platforms covered in this book. The second option is to pack two separate =cmsghdr= structures into a single message:
+
+
+
+struct msghdr msg;
+struct cmsghdr *cmptr;
+
+if ((cmptr = calloc(1, 2*CMSG_LEN(sizeof(int)))) == NULL)
+     err_sys("calloc error");
+msg.msg_control = cmptr;
+msg.msg_controllen = 2*CMSG_LEN(sizeof(int));
+/* continue initializing msghdr... */
+cmptr->cmsg_len = CMSG_LEN(sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+*(int *)CMSG_DATA(cmptr) = fd1;
+cmptr = CMPTR_NXTHDR(&msg, cmptr);
+cmptr->cmsg_len = CMSG_LEN(sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+*(int *)CMSG_DATA(cmptr) = fd2;
+
+Unlike the first approach, this method works only on FreeBSD 8.0.
+
+** Chapter 18
+
+
+*[[file:part0030.xhtml#ch18que01][18.1]]* Note that you have to terminate the =reset= command with a line feed character, not a return, since the terminal is in noncanonical mode.
+
+*[[file:part0030.xhtml#ch18que02][18.2]]* It builds a table for each of the 128 characters and sets the high-order bit (the parity bit) according to the user's specification. It then uses 8-bit I/O, handling the parity generation itself.
+
+*[[file:part0030.xhtml#ch18que03][18.3]]* If you happen to be on a windowing terminal, you don't need to log in twice. You can do this experiment between two separate windows. Under Solaris, execute =stty -a= with standard input redirected from the terminal window running =vi=. This shows that =vi= sets MIN to 1 and TIME to 1. A call to =read= will wait for at least one character to be typed, but after that character is entered, =read= waits only one-tenth of a second for additional characters before returning.
+
+** Chapter 19
+
+
+*[[file:part0031.xhtml#ch19que01][19.1]]* Both servers, =telnetd= and =rlogind=, run with superuser privileges, so their calls to =chown= and =chmod= succeed.
+
+*[[file:part0031.xhtml#ch19que02][19.2]]* Execute =pty -n stty -a= to prevent the slave's =termios= structure and =winsize= structure from being initialized.
+
+*[[file:part0031.xhtml#ch19que04][19.4]]* Unfortunately, the =F_SETFL= command of =fcntl= doesn't allow the read--write status to be changed.
+
+*[[file:part0031.xhtml#ch19que05][19.5]]* There are three process groups: (1) the login shell, (2) the =pty= parent and child, and (3) the =cat= process. The first two process groups constitute a session with the login shell as the session leader. The second session contains only the =cat= process. The first process group (the login shell) is a background process group, and the other two are foreground process groups.
+
+*[[file:part0031.xhtml#ch19que06][19.6]]* First, =cat= terminates when it receives the end of file from its line discipline. This causes the PTY slave to terminate, which causes the PTY master to terminate. This in turn generates an end of file for the =pty= parent that's reading from the PTY master. The parent sends =SIGTERM= to the child, so the child terminates next. (The child doesn't catch this signal.) Finally, the parent calls =exit(0)= at the end of the =main= function.
+
+The relevant output from the program shown in [[file:part0020.xhtml#ch08fig29][Figure 8.29]] is
+
+
+
+cat       e =    270, chars =     274, stat =   0:
+pty       e =    262, chars =      40, stat =  15: F    X
+pty       e =    288, chars =     188, stat =   0:
+
+*[[file:part0031.xhtml#ch19que07][19.7]]* This can be done with the shell's =echo= command and the =date(1)= command, all in a subshell:
+
+
+
+#!/bin/sh
+( echo "Script started on " `date`;
+  pty "${SHELL:-/bin/sh}";
+  echo "Script done on " `date` ) | tee typescript
+
+*[[file:part0031.xhtml#ch19que08][19.8]]* The line discipline above the PTY slave has echo enabled, so whatever =pty= reads on its standard input and writes to the PTY master gets echoed by default. This echoing is done by the line discipline module above the slave even though the program (=ttyname=) never reads the data.
+
+** Chapter 20
+
+
+*[[file:part0032.xhtml#ch20que01][20.1]]* Our conservative locking in =_db_dodelete= is meant to avoid race conditions with =db_nextrec=. If the call to =_db_writedat= were not protected with a write lock, it would be possible to erase the data record while =db_nextrec= was reading that data record: =db_nextrec= would read an index record, determine that it was not blank, and then read the data record, which could be erased by =_db_dodelete= between the calls to =_db_readidx= and =_db_readdat= in =db_nextrec=.
+
+*[[file:part0032.xhtml#ch20que02][20.2]]* Assume that =db_nextrec= calls =_db_readidx=, which reads the key into the index buffer for the process. This process is then stopped by the kernel, and another process runs. This other process calls =db_delete=, and the record being read by the other process is deleted. Both its key and its data are rewritten in the two files as all blanks. The first process resumes and calls =_db_readdat= (from =db_nextrec=) and reads the all-blank data record. The read lock by =db_nextrec= allows it to do the read of the index record, followed by the read of the data record, as an atomic operation (with regard to other cooperating processes using the same database).
+
+*[[file:part0032.xhtml#ch20que03][20.3]]* With mandatory locking, other readers and writers are affected. Other reads and writes are blocked by the kernel until the locks placed by =_db_writeidx= and =_db_writedat= are removed.
+
+*[[file:part0032.xhtml#ch20que05][20.5]]* By writing the data record before the index record, we protect ourselves from generating a corrupt record if the process should be killed in between the two writes. If the process were to write the index record first, but be killed before writing the data record, then we'd have a valid index record that pointed to invalid data.
+
+** Chapter 21
+
+
+*[[file:part0033.xhtml#ch21que05][21.5]]* Here are some hints. There are two places to check for queued jobs: the printer spooling daemon's queue and the network printer's internal queue. Take care to prevent one user from being able to cancel someone else's print job. Of course, the superuser should be able to cancel any job.
+
+*[[file:part0033.xhtml#ch21que07][21.7]]* We don't need to prod the daemon, because we don't need to reread the configuration file until we need to print a file. The =printer_thread= function checks whether it needs to reread the configuration file before each attempt to send a job to the printer.
+
+*[[file:part0033.xhtml#ch21que09][21.9]]* We need to null-terminate the string we write to the job file (recall that =strlen= doesn't include the terminating null byte when it calculates the length of a string). There are two simple approaches: either we can add 1 to the number of bytes we write, or we can use the =dprintf= function instead of calling =sprintf= and =write=.
+to =stat= and the call to =unlink= where the file can change. The second problem is that if the name is a symbolic link pointing to the UNIX domain socket file, then =stat= will report that the name is a socket (recall that the =stat= function follows symbolic links), but when we call =unlink=, we will actually remove the symbolic link instead of the socket file. To solve this problem, we should use =lstat= instead of =stat=, but this doesn't solve the first problem.
+
+*[[file:part0029.xhtml#ch17que07][17.7]]* The first option is to send both file descriptors in one control message. Each file descriptor is stored in adjacent memory locations. The following code shows this:
+
+
+
+struct msghdr msg;
+struct cmsghdr *cmptr;
+int *ip;
+if ((cmptr = calloc(1, CMSG_LEN(2*sizeof(int)))) == NULL)
+     err_sys("calloc error");
+msg.msg_control = cmptr;
+msg.msg_controllen = CMSG_LEN(2*sizeof(int));
+/* continue initializing msghdr... */
+cmptr->cmsg_len = CMSG_LEN(2*sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+ip = (int *)CMSG_DATA(cmptr);
+*ip++ = fd1;
+*ip = fd2;
+
+This approach works on all four platforms covered in this book. The second option is to pack two separate =cmsghdr= structures into a single message:
+
+
+
+struct msghdr msg;
+struct cmsghdr *cmptr;
+
+if ((cmptr = calloc(1, 2*CMSG_LEN(sizeof(int)))) == NULL)
+     err_sys("calloc error");
+msg.msg_control = cmptr;
+msg.msg_controllen = 2*CMSG_LEN(sizeof(int));
+/* continue initializing msghdr... */
+cmptr->cmsg_len = CMSG_LEN(sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+*(int *)CMSG_DATA(cmptr) = fd1;
+cmptr = CMPTR_NXTHDR(&msg, cmptr);
+cmptr->cmsg_len = CMSG_LEN(sizeof(int));
+cmptr->cmsg_level = SOL_SOCKET;
+cmptr->cmsg_type = SCM_RIGHTS;
+*(int *)CMSG_DATA(cmptr) = fd2;
+
+Unlike the first approach, this method works only on FreeBSD 8.0.
+
+** Chapter 18
+
+
+*[[file:part0030.xhtml#ch18que01][18.1]]* Note that you have to terminate the =reset= command with a line feed character, not a return, since the terminal is in noncanonical mode.
+
+*[[file:part0030.xhtml#ch18que02][18.2]]* It builds a table for each of the 128 characters and sets the high-order bit (the parity bit) according to the user's specification. It then uses 8-bit I/O, handling the parity generation itself.
+
+*[[file:part0030.xhtml#ch18que03][18.3]]* If you happen to be on a windowing terminal, you don't need to log in twice. You can do this experiment between two separate windows. Under Solaris, execute =stty -a= with standard input redirected from the terminal window running =vi=. This shows that =vi= sets MIN to 1 and TIME to 1. A call to =read= will wait for at least one character to be typed, but after that character is entered, =read= waits only one-tenth of a second for additional characters before returning.
+
+** Chapter 19
+
+
+*[[file:part0031.xhtml#ch19que01][19.1]]* Both servers, =telnetd= and =rlogind=, run with superuser privileges, so their calls to =chown= and =chmod= succeed.
+
+*[[file:part0031.xhtml#ch19que02][19.2]]* Execute =pty -n stty -a= to prevent the slave's =termios= structure and =winsize= structure from being initialized.
+
+*[[file:part0031.xhtml#ch19que04][19.4]]* Unfortunately, the =F_SETFL= command of =fcntl= doesn't allow the read--write status to be changed.
+
+*[[file:part0031.xhtml#ch19que05][19.5]]* There are three process groups: (1) the login shell, (2) the =pty= parent and child, and (3) the =cat= process. The first two process groups constitute a session with the login shell as the session leader. The second session contains only the =cat= process. The first process group (the login shell) is a background process group, and the other two are foreground process groups.
+
+*[[file:part0031.xhtml#ch19que06][19.6]]* First, =cat= terminates when it receives the end of file from its line discipline. This causes the PTY slave to terminate, which causes the PTY master to terminate. This in turn generates an end of file for the =pty= parent that's reading from the PTY master. The parent sends =SIGTERM= to the child, so the child terminates next. (The child doesn't catch this signal.) Finally, the parent calls =exit(0)= at the end of the =main= function.
+
+The relevant output from the program shown in [[file:part0020.xhtml#ch08fig29][Figure 8.29]] is
+
+
+
+cat       e =    270, chars =     274, stat =   0:
+pty       e =    262, chars =      40, stat =  15: F    X
+pty       e =    288, chars =     188, stat =   0:
+
+*[[file:part0031.xhtml#ch19que07][19.7]]* This can be done with the shell's =echo= command and the =date(1)= command, all in a subshell:
+
+
+
+#!/bin/sh
+( echo "Script started on " `date`;
+  pty "${SHELL:-/bin/sh}";
+  echo "Script done on " `date` ) | tee typescript
+
+*[[file:part0031.xhtml#ch19que08][19.8]]* The line discipline above the PTY slave has echo enabled, so whatever =pty= reads on its standard input and writes to the PTY master gets echoed by default. This echoing is done by the line discipline module above the slave even though the program (=ttyname=) never reads the data.
+
+** Chapter 20
+
+
+*[[file:part0032.xhtml#ch20que01][20.1]]* Our conservative locking in =_db_dodelete= is meant to avoid race conditions with =db_nextrec=. If the call to =_db_writedat= were not protected with a write lock, it would be possible to erase the data record while =db_nextrec= was reading that data record: =db_nextrec= would read an index record, determine that it was not blank, and then read the data record, which could be erased by =_db_dodelete= between the calls to =_db_readidx= and =_db_readdat= in =db_nextrec=.
+
+*[[file:part0032.xhtml#ch20que02][20.2]]* Assume that =db_nextrec= calls =_db_readidx=, which reads the key into the index buffer for the process. This process is then stopped by the kernel, and another process runs. This other process calls =db_delete=, and the record being read by the other process is deleted. Both its key and its data are rewritten in the two files as all blanks. The first process resumes and calls =_db_readdat= (from =db_nextrec=) and reads the all-blank data record. The read lock by =db_nextrec= allows it to do the read of the index record, followed by the read of the data record, as an atomic operation (with regard to other cooperating processes using the same database).
+
+*[[file:part0032.xhtml#ch20que03][20.3]]* With mandatory locking, other readers and writers are affected. Other reads and writes are blocked by the kernel until the locks placed by =_db_writeidx= and =_db_writedat= are removed.
+
+*[[file:part0032.xhtml#ch20que05][20.5]]* By writing the data record before the index record, we protect ourselves from generating a corrupt record if the process should be killed in between the two writes. If the process were to write the index record first, but be killed before writing the data record, then we'd have a valid index record that pointed to invalid data.
+
+** Chapter 21
+
+
+*[[file:part0033.xhtml#ch21que05][21.5]]* Here are some hints. There are two places to check for queued jobs: the printer spooling daemon's queue and the network printer's internal queue. Take care to prevent one user from being able to cancel someone else's print job. Of course, the superuser should be able to cancel any job.
+
+*[[file:part0033.xhtml#ch21que07][21.7]]* We don't need to prod the daemon, because we don't need to reread the configuration file until we need to print a file. The =printer_thread= function checks whether it needs to reread the configuration file before each attempt to send a job to the printer.
+
+*[[file:part0033.xhtml#ch21que09][21.9]]* We need to null-terminate the string we write to the job file (recall that =strlen= doesn't include the terminating null byte when it calculates the length of a string). There are two simple approaches: either we can add 1 to the number of bytes we write, or we can use the =dprintf= function instead of calling =sprintf= and =write=.
+t need to prod the daemon, because we don't need to reread the configuration file until we need to print a file. The =printer_thread= function checks whether it needs to reread the configuration file before each attempt to send a job to the printer.
+
+*[[file:part0033.xhtml#ch21que09][21.9]]* We need to null-terminate the string we write to the job file (recall that =strlen= doesn't include the terminating null byte when it calculates the length of a string). There are two simple approaches: either we can add 1 to the number of bytes we write, or we can use the =dprintf= function instead of calling =sprintf= and =write=.

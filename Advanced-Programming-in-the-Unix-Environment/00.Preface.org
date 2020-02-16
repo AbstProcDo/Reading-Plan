@@ -1,0 +1,286 @@
+* Preface to the First Edition
+* Introduction
+
+This book describes the programming interface to the Unix system---the system call interface and many of the functions provided in the standard C library. It is intended for anyone writing programs that run under Unix.
+
+Like most operating systems, Unix provides numerous services to the programs that are running---open a file, read a file, start a new program, allocate a region of memory, get the current time-of-day, and so on. This has been termed the /system call interface/. Additionally, the standard C library provides numerous functions that are used by almost every C program (format a variable's value for output, compare two strings, etc.).
+
+The system call interface and the library routines have traditionally been described in Sections 2 and 3 of the /Unix Programmer's Manual/. This book is not a duplication of these sections. Examples and rationale are missing from the /Unix Programmer's Manual/, and that's what this book provides.
+
+* Unix Standards
+
+The proliferation of different versions of Unix during the 1980s has been tempered by the various international standards that were started during the late 1980s. These include the ANSI standard for the C programming language, the IEEE POSIX family (still being developed), and the X/Open portability guide.
+
+This book also describes these standards. But instead of just describing the standards by themselves, we describe them in relation to popular implementations of the standards---System V Release 4 and the forthcoming 4.4BSD. This provides a real-world description, which is often lacking from the standard itself and from books that describe only the standard.
+
+* Organization of the Book
+
+This book is divided into six parts:
+# 整本书的架构一直没有变动
+1. An overview and introduction to basic Unix programming concepts and terminology ([[file:part0013.xhtml#ch01][Chapter 1]]), with a discussion of the various Unix standardization efforts and different Unix implementations ([[file:part0014.xhtml#ch02][Chapter 2]]).
+
+2. I/O---unbuffered I/O ([[file:part0015.xhtml#ch03][Chapter 3]]), properties of files and directories ([[file:part0016.xhtml#ch04][Chapter 4]]), the standard I/O library ([[file:part0017.xhtml#ch05][Chapter 5]]), and the standard system data files ([[file:part0018.xhtml#ch06][Chapter 6]]).
+
+3. Processes---the environment of a Unix process ([[file:part0019.xhtml#ch07][Chapter 7]]), process control ([[file:part0020.xhtml#ch08][Chapter 8]]), the relationships between different processes ([[file:part0021.xhtml#ch09][Chapter 9]]), and signals ([[file:part0022.xhtml#ch10][Chapter 10]]).
+
+4. More I/O---terminal I/O ([[file:part0023.xhtml#ch11][Chapter 11]]), advanced I/O ([[file:part0024.xhtml#ch12][Chapter 12]]), and daemon processes ([[file:part0025.xhtml#ch13][Chapter 13]]).
+
+5. IPC---Interprocess communication ([[file:part0026.xhtml#ch14][Chapters 14]] and [[file:part0027.xhtml#ch15][15]]).
+
+6. Examples---a database library ([[file:part0028.xhtml#ch16][Chapter 16]]), communicating with a PostScript printer ([[file:part0029.xhtml#ch17][Chapter 17]]), a modem dialing program ([[file:part0030.xhtml#ch18][Chapter 18]]), and using pseudo terminals ([[file:part0031.xhtml#ch19][Chapter 19]]).
+
+A reading familiarity with C would be beneficial as would some experience using Unix. No prior programming experience with Unix is assumed. This text is intended for programmers familiar with Unix and programmers familiar with some other operating system who wish to learn the details of the services provided by most Unix systems.
+
+* Examples in the Text
+
+
+This book contains many examples---approximately 10,000 lines of source code. All the examples are in the C programming language. Furthermore, these examples are in ANSI C. You should have a copy of the /Unix Programmer's Manual/ for your system handy while reading this book, since reference is made to it for some of the more esoteric and implementation-dependent features.
+
+Almost every function and system call is demonstrated with a small, complete program. This lets us see the arguments and return values and is often easier to comprehend than the use of the function in a much larger program. But since some of the small programs are contrived examples, a few bigger examples are also included ([[file:part0028.xhtml#ch16][Chapters 16]], [[file:part0029.xhtml#ch17][17]], [[file:part0030.xhtml#ch18][18]], and [[file:part0031.xhtml#ch19][19]]). These larger examples demonstrate the programming techniques in larger, real-world examples.
+
+All the examples have been included in the text directly from their source files. A machine-readable copy of all the examples is available via anonymous FTP from the Internet host =ftp.uu.net= in the file =published/books/stevens.advprog.tar.Z=. Obtaining the source code allows you to modify the programs from this text and experiment with them on your system.
+
+* Systems Used to Test the Examples
+
+
+Unfortunately all operating systems are moving targets. Unix is no exception. The following diagram shows the recent evolution of the various versions of System V and 4.xBSD.
+
+[[./Images/image01287.jpeg]]
+
+4.xBSD are the various systems from the Computer Systems Research Group at the University of California at Berkeley. This group also distributes the BSD Net 1 and BSD Net 2 releases---publicly available source code from the 4.xBSD systems. SVRx refers to System V Release x from AT&T. XPG3 is the X/Open Portability Guide, Issue 3, and ANSI C is the ANSI standard for the C programming language. POSIX.1 is the IEEE and ISO standard for the interface to a Unix-like system. We'll have more to say about these different standards and the various versions of Unix in [[file:part0014.xhtml#ch02lev1sec2][Sections 2.2]] and [[file:part0014.xhtml#ch02lev1sec3][2.3]].
+
+*In this text we use the term /4.3+BSD/ to refer to the Unix system from Berkeley that is somewhere between the BSD Net 2 release and 4.4BSD.*
+
+At the time of this writing, 4.4BSD was not released, so the system could not be called 4.4BSD. Nevertheless a simple name was needed to refer to this system and /4.3+BSD/ is used throughout the text.
+
+Most of the examples in this text have been run on four different versions of Unix:
+
+1. Unix System V/386 Release 4.0 Version 2.0 (“vanilla SVR4”) from U.H. Corp. (UHC), on an Intel 80386 processor.
+
+2. 4.3+BSD at the Computer Systems Research Group, Computer Science Division, University of California at Berkeley, on a Hewlett Packard workstation.
+
+3. BSD/386 (a derivative of the BSD Net 2 release) from Berkeley Software Design, Inc., on an Intel 80386 processor. This system is almost identical to what we call 4.3+BSD.
+
+4. SunOS 4.1.1 and 4.1.2 (systems with a strong Berkeley heritage but many System V features) from Sun Microsystems, on a SPARCstation SLC.
+
+Numerous timing tests are provided in the text and the systems used for the test are identified.
+
+* Acknowledgments
+
+
+Once again I am indebted to my family for their love, support, and many lost weekends over the past year and a half. Writing a book is, in many ways, a family affair. Thank you Sally, Bill, Ellen, and David.
+
+I am especially grateful to Brian Kernighan for his help in the book. His numerous thorough reviews of the entire manuscript and his gentle prodding for better prose hopefully show in the final result. Steve Rago was also a great resource, both in reviewing the entire manuscript and answering many questions about the details and history of System V. My thanks to the other technical reviewers used by Addison-Wesley, who provided valuable comments on various portions of the manuscript: Maury Bach, Mark Ellis, Jeff Gitlin, Peter Honeyman, John Linderman, Doug McIlroy, Evi Nemeth, Craig Partridge, Dave Presotto, Gary Wilson, and Gary Wright.
+
+Keith Bostic and Kirk McKusick at the U.C. Berkeley CSRG provided an account that was used to test the examples on the latest BSD system. (Many thanks to Peter Salus too.) Sam Nataros and Joachim Sacksen at UHC provided the copy of SVR4 used to test the examples. Trent Hein helped obtain the alpha and beta copies of BSD/386.
+
+Other friends have helped in many small, but significant ways over the past few years: Paul Lucchina, Joe Godsil, Jim Hogue, Ed Tankus, and Gary Wright. My editor at Addison-Wesley, John Wait, has been a great friend through it all. He never complained when the due date slipped and the page count kept increasing. A special thanks to the National Optical Astronomy Observatories (NOAO), especially Sidney Wolff, Richard Wolff, and Steve Grandi, for providing computer time.
+
+/Real/ Unix books are written using troff and this book follows that time-honored tradition. Camera-ready copy of the book was produced by the author using the groff package written by James Clark. Many thanks to James Clark for providing this excellent system and for his rapid response to bug fixes. Perhaps someday I will really understand troff footer traps.
+
+I welcome electronic mail from any readers with comments, suggestions, or bug fixes.
+
+/Tucson, Arizona/
+
+/April 1992/
+
+W. Richard Stevens
+
+=rstevens@kohala.com=
+
+=http://www.kohala.com/~rstevens=
+* Publish
+#+begin_src ipython :session apue :results output
+import glob
+import os
+import re
+import subprocess
+
+htmls = glob.glob("*.xhtml")
+# print(htmls)
+htmls.sort(key=lambda x: int(x[0:2]))
+
+# print(htmls)
+# for i, e in enumerate(htmls, start=1):
+#     os.rename(e, f"{i:02}.xhtml")
+
+for html in htmls:
+    cmd = f"pandoc --wrap=none {html} -o {re.sub(r'xhtml$', 'org', html)}"
+    assert cmd.endswith("org"), "not ends with org"
+    subprocess.run(cmd, shell=True)
+
+print(os.listdir())
+
+#+end_src
+
+#+RESULTS:
+: ['13.org', '17.org', '24.org', '07.org', 'readme.org', '12.org', '15.Interprocess Communication.org', '24.xhtml', '01.org', '14.xhtml', '05.xhtml', '18.xhtml', '02.xhtml', '22.org', '15.xhtml', '14.org', '20.xhtml', '16.xhtml', '02.org', '19.org', '12.xhtml', '11.xhtml', '10.org', '17.xhtml', '08.org', '13.xhtml', '07.xhtml', '10.xhtml', '04.org', '11.org', '21.org', '21.xhtml', '25.org', '15.org', '01.xhtml', '04.xhtml', '03.org', '16.org', '08.xhtml', '22.xhtml', '20.org', '06.xhtml', '06.org', '23.org', '25.xhtml', '09.xhtml', '18.org', '00.Preface.org', '03.xhtml', '09.org', '19.xhtml', '23.xhtml', '05.org']
+
+#+begin_src ipython :session apue :results value
+!ls 
+#+end_src
+
+#+RESULTS:
+: # Out[68]:
+
+#+begin_src ipython :session apue :results output
+!pandoc --wrap=none 00.Preface.org -o ~/Public/nikola_post/posts/读书评注:APUE.rst
+
+#+end_src
+
+#+RESULTS:
+: pandoc: /home/gaowei/Public/nikola_post/posts/读书评注:APUE.rst: openFile: does not exist (No such file or directory)
+
+* Clean Chapters
+#+begin_src ipython :session apue :results output
+import re
+import glob
+
+
+def clearup(filename):
+    fp = open(filename, "r+")
+    text = fp.read()
+    text = re.sub(r"\\", "", text)
+    text = re.sub(r"<<.+>>", "", text)
+    text = re.sub(r".*:PROPERTIES:.*\n.*:CUSTOM_ID:.*\n.*:END:.*", "",
+            text)
+
+    text = re.sub(r"\*(\d\.\d)\*", "\g<1>", text)
+    text = re.sub(r"\[\[.*Click here to view code image.*\]",   "", text)
+    text = re.sub(r"\*\[\[.*\]\[([0-9]\.[0-9]*)\]\]\*", "\g<1>", text)
+    # print(text[:100])
+    fp.seek(0)
+    fp.write(text)
+    fp.close()
+
+clearup("07.org")
+
+# orgs = glob.glob("*.org")
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ipython :session apue :results output
+import glob
+
+
+orgs = glob.glob("*.org")
+orgs = filter(lambda x: x[0].isdigit(), orgs)
+orgs = sorted(orgs, key=lambda x: x[0:2])[10:]
+# orgs.sort(key=lambda x: int(x[0:2]))
+
+for org in orgs:
+    clearup(org)
+
+#+end_src
+
+#+RESULTS:
+* Add chapter names
+
+#+begin_src ipython :session apue :results output
+print(cs)
+import glob
+import os
+
+orgs = glob.glob("*.org")
+orgs.sort(key=lambda x: x[:2])
+orgs = orgs[1:23]
+
+
+for old, new in td:
+    os.rename(old, new)
+
+print(orgs)
+#+end_src
+
+#+RESULTS:
+: ['01.UNIX-System-Overview', '02.UNIX-Standardization-and-Implementations', '03.File-IO', '04.Files-and-Directories', '05.Standard-IO-Library', '06.System-Data-Files-and-Information', '07.Process-Environment', '08.Process-Control', '09.Process-Relationships', '10.Signals', '11.Threads', '12.Thread-Control', '13.Daemon-Processes', '14.Advanced-IO', '15.Interprocess-Communication', '16.Network-IPC:-Sockets', '17.Advanced-IPC', '18.Terminal-IO', '19.Pseudo-Terminals', '20.A-Database-Library', '21.Communicating-with-a-Network-Printer']
+: ['21.org', '22.org', '23.org', '24.org', '25.org', 'readme.org', 'test.org']
+
+
+#+begin_src ipython :session apue :results output
+# 忘记加后缀名
+# ! rm *.xhtml
+fs = os.listdir()
+fs = filter(lambda x: not x.endswith("org"), fs)
+print(list(fs))
+# map(lambda x: os.rename(x, f"{x}.org"), fs)
+! ls
+# print(fs)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+['19.Pseudo-Terminals', '12.Thread-Control', '05.Standard-IO-Library', '07.Process-Environment', '03.File-IO', '04.Files-and-Directories', '09.Process-Relationships', '11.Threads', '18.Terminal-IO', '10.Signals', '16.Network-IPC:-Sockets', '13.Daemon-Processes', '17.Advanced-IPC', '20.A-Database-Library', '15.Interprocess-Communication', '08.Process-Control', '06.System-Data-Files-and-Information', '21.Communicating-with-a-Network-Printer', '14.Advanced-IO', '01.UNIX-System-Overview', '02.UNIX-Standardization-and-Implementations']
+00.Preface.org
+01.UNIX-System-Overview
+02.UNIX-Standardization-and-Implementations
+03.File-IO
+04.Files-and-Directories
+05.Standard-IO-Library
+06.System-Data-Files-and-Information
+07.Process-Environment
+08.Process-Control
+09.Process-Relationships
+10.Signals
+11.Threads
+12.Thread-Control
+13.Daemon-Processes
+14.Advanced-IO
+15.Interprocess-Communication
+16.Network-IPC:-Sockets
+17.Advanced-IPC
+18.Terminal-IO
+19.Pseudo-Terminals
+20.A-Database-Library
+21.Communicating-with-a-Network-Printer
+21.org
+22.org
+23.org
+24.org
+25.org
+readme.org
+test.org
+#+end_example
+
+#+begin_src ipython :session alinbx :results output
+import os
+import glob
+import copy
+
+fs = os.listdir()
+fs = filter(lambda x: not x.endswith("org"), fs)
+fsc = copy.deepcopy(fs)
+print(list(fsc)[:5])
+#
+#+end_src
+
+#+RESULTS:
+: ['19.Pseudo-Terminals', '12.Thread-Control', '05.Standard-IO-Library', '07.Process-Environment', '03.File-IO']
+
+
+#+begin_src ipython :session alinbx :results output
+map(lambda x: os.rename(x, x+'.org'), fs)
+! ls | head -n 5
+#+end_src
+
+#+RESULTS:
+: 00.Preface.org
+: 01.UNIX-System-Overvie
+: 01.xhtml
+: 02.UNIX-Standardization-and-Implementations
+: 03.File-IO
+
+
+#+begin_src ipython :session alinbx :results output
+for f in fs:
+    os.rename(f, f"{f}.org")
+! ls | head -n 5
+#+end_src
+
+#+RESULTS:
+: 00.Preface.org
+: 01.UNIX-System-Overview.org
+: 01.xhtml.org
+: 02.UNIX-Standardization-and-Implementations.org
+: 03.File-IO.org

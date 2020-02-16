@@ -1,4 +1,5 @@
 #+TITLE: readme
+* 启动
 “步步为营, 零秒精通Emacs"的
 第四章"04-Case:如何严肃阅读一本书”
 探讨以org为工作助力阅读的系统方法,
@@ -32,3 +33,7 @@
 - 4.Start at the End
 #+ATTR_HTML: :width 600px
 [[file:../images/Sprint:Apollo.png]]
+* 日志
+- 2020-02-15 Sprint:Solve Big Problems and Test New Ideas in Just Five Days
+- 2020-02-16 Advanced Programming in the Unix Environment
+- 2020-02-16 C Primer Plus

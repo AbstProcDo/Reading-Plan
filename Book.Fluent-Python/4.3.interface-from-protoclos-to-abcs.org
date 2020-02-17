@@ -1,4 +1,4 @@
-** Chapter 11. Interfaces: From Protocols to ABCs
+* Chapter 11. Interfaces: From Protocols to ABCs
 
 
 Virtual subclasses do not inherit from their registered ABCs, and are not checked for conformance to the ABC interface at any time, not even when they are instantiated. It's up to the subclass to actually implement all the methods needed to avoid runtime errors.

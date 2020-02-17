@@ -1,0 +1,561 @@
+
+* Fluent Python
+
+Table of Contents
+
++ [[file:dedication.html][Dedication]]
++ [[file:pr02.html][Preface]]
+
+  1. [[file:pr02.html#_who_this_book_is_for][Who This Book Is For]]
+  2. [[file:pr02.html#_who_this_book_is_not_for][Who This Book Is Not For]]
+  3. [[file:pr02.html#_how_this_book_is_organized][How This Book Is Organized]]
+  4. [[file:pr02.html#_hands_on_approach][Hands-On Approach]]
+  5. [[file:pr02.html#_hardware_used_for_timings][Hardware Used for Timings]]
+  6. [[file:pr02.html#_soapbox_my_personal_perspective][Soapbox: My Personal Perspective]]
+  7. [[file:pr02.html#_python_jargon][Python Jargon]]
+  8. [[file:pr02.html#_python_version_covered][Python Version Covered]]
+  9. [[file:pr02.html#_conventions_used_in_this_book][Conventions Used in This Book]]
+  10. [[file:pr02.html#_using_code_examples][Using Code Examples]]
+  11. [[file:pr02.html#_safari_books_online][Safari® Books Online]]
+  12. [[file:pr02.html#_how_to_contact_us][How to Contact Us]]
+  13. [[file:pr02.html#_acknowledgments][Acknowledgments]]
+
++ [[file:pt01.html][I. Prologue]]
+
+  - [[file:ch01.html][1. The Python Data Model]]
+
+    1. [[file:ch01.html#pythonic_card_deck][A Pythonic Card Deck]]
+    2. [[file:ch01.html#how_special_used][How Special Methods Are Used]]
+
+       1. [[file:ch01.html#data_model_emulating_sec][Emulating Numeric Types]]
+       2. [[file:ch01.html#repr_intro][String Representation]]
+       3. [[file:ch01.html#_arithmetic_operators][Arithmetic Operators]]
+       4. [[file:ch01.html#_boolean_value_of_a_custom_type][Boolean Value of a Custom Type]]
+
+    3. [[file:ch01.html#_overview_of_special_methods][Overview of Special Methods]]
+    4. [[file:ch01.html#_why_len_is_not_a_method][Why len Is Not a Method]]
+    5. [[file:ch01.html#_chapter_summary][Chapter Summary]]
+    6. [[file:ch01.html#_further_reading][Further Reading]]
+
++ [[file:pt02.html][II. Data Structures]]
+
+  - [[file:ch02.html][2. An Array of Sequences]]
+
+    1. [[file:ch02.html#_overview_of_built_in_sequences][Overview of Built-In Sequences]]
+    2. [[file:ch02.html#_list_comprehensions_and_generator_expressions][List Comprehensions and Generator Expressions]]
+
+       1. [[file:ch02.html#_list_comprehensions_and_readability][List Comprehensions and Readability]]
+       2. [[file:ch02.html#_listcomps_versus_map_and_filter][Listcomps Versus map and filter]]
+       3. [[file:ch02.html#cartesian_product_sec][Cartesian Products]]
+       4. [[file:ch02.html#_generator_expressions][Generator Expressions]]
+
+    3. [[file:ch02.html#_tuples_are_not_just_immutable_lists][Tuples Are Not Just Immutable Lists]]
+
+       1. [[file:ch02.html#_tuples_as_records][Tuples as Records]]
+       2. [[file:ch02.html#_tuple_unpacking][Tuple Unpacking]]
+
+          1. [[file:ch02.html#tuple_star][Using * to grab excess items]]
+
+       3. [[file:ch02.html#_nested_tuple_unpacking][Nested Tuple Unpacking]]
+       4. [[file:ch02.html#_named_tuples][Named Tuples]]
+       5. [[file:ch02.html#_tuples_as_immutable_lists][Tuples as Immutable Lists]]
+
+    4. [[file:ch02.html#_slicing][Slicing]]
+
+       1. [[file:ch02.html#_why_slices_and_range_exclude_the_last_item][Why Slices and Range Exclude the Last Item]]
+       2. [[file:ch02.html#slice_objects][Slice Objects]]
+       3. [[file:ch02.html#_multidimensional_slicing_and_ellipsis][Multidimensional Slicing and Ellipsis]]
+       4. [[file:ch02.html#_assigning_to_slices][Assigning to Slices]]
+
+    5. [[file:ch02.html#_using_and_with_sequences][Using + and * with Sequences]]
+
+       1. [[file:ch02.html#_building_lists_of_lists][Building Lists of Lists]]
+
+    6. [[file:ch02.html#_augmented_assignment_with_sequences][Augmented Assignment with Sequences]]
+
+       1. [[file:ch02.html#tuple_puzzler][A += Assignment Puzzler]]
+
+    7. [[file:ch02.html#sort_x_sorted][list.sort and the sorted Built-In Function]]
+    8. [[file:ch02.html#bisect_section][Managing Ordered Sequences with bisect]]
+
+       1. [[file:ch02.html#_searching_with_bisect][Searching with bisect]]
+       2. [[file:ch02.html#insort][Inserting with bisect.insort]]
+
+    9. [[file:ch02.html#_when_a_list_is_not_the_answer][When a List Is Not the Answer]]
+
+       1. [[file:ch02.html#arrays_sec][Arrays]]
+       2. [[file:ch02.html#memoryview_sec][Memory Views]]
+       3. [[file:ch02.html#numpy_sec][NumPy and SciPy]]
+       4. [[file:ch02.html#_deques_and_other_queues][Deques and Other Queues]]
+
+    10. [[file:ch02.html#_chapter_summary_2][Chapter Summary]]
+    11. [[file:ch02.html#array_fur_reading_sec][Further Reading]]
+
+  - [[file:ch03.html][3. Dictionaries and Sets]]
+
+    1. [[file:ch03.html#_generic_mapping_types][Generic Mapping Types]]
+    2. [[file:ch03.html#dictcomp_sec][dict Comprehensions]]
+    3. [[file:ch03.html#_overview_of_common_mapping_methods][Overview of Common Mapping Methods]]
+
+       1. [[file:ch03.html#handling_missing_keys][Handling Missing Keys with setdefault]]
+
+    4. [[file:ch03.html#_mappings_with_flexible_key_lookup][Mappings with Flexible Key Lookup]]
+
+       1. [[file:ch03.html#defaultdict_sec][defaultdict: Another Take on Missing Keys]]
+       2. [[file:ch03.html#missing_method][The \_\_missing\_\_ Method]]
+
+    5. [[file:ch03.html#_variations_of_dict][Variations of dict]]
+    6. [[file:ch03.html#_subclassing_userdict][Subclassing UserDict]]
+    7. [[file:ch03.html#_immutable_mappings][Immutable Mappings]]
+    8. [[file:ch03.html#_set_theory][Set Theory]]
+
+       1. [[file:ch03.html#_set_literals][set Literals]]
+       2. [[file:ch03.html#_set_comprehensions][Set Comprehensions]]
+       3. [[file:ch03.html#set_op_section][Set Operations]]
+
+    9. [[file:ch03.html#_dict_and_set_under_the_hood][dict and set Under the Hood]]
+
+       1. [[file:ch03.html#_a_performance_experiment][A Performance Experiment]]
+       2. [[file:ch03.html#_hash_tables_in_dictionaries][Hash Tables in Dictionaries]]
+
+          1. [[file:ch03.html#_hashes_and_equality][Hashes and equality]]
+          2. [[file:ch03.html#_the_hash_table_algorithm][The hash table algorithm]]
+
+       3. [[file:ch03.html#consequences-dict-internals][Practical Consequences of How dict Works]]
+
+          1. [[file:ch03.html#_keys_must_be_hashable_objects][Keys must be hashable objects]]
+          2. [[file:ch03.html#_dicts_have_significant_memory_overhead][dicts have significant memory overhead]]
+          3. [[file:ch03.html#_key_search_is_very_fast][Key search is very fast]]
+          4. [[file:ch03.html#_key_ordering_depends_on_insertion_order][Key ordering depends on insertion order]]
+          5. [[file:ch03.html#_adding_items_to_a_dict_may_change_the_order_of_existing_keys][Adding items to a dict may change the order of existing keys]]
+
+       4. [[file:ch03.html#_how_sets_work_8212_practical_consequences][How Sets Work---Practical Consequences]]
+
+    10. [[file:ch03.html#_chapter_summary_3][Chapter Summary]]
+    11. [[file:ch03.html#further_reading_dict][Further Reading]]
+
+  - [[file:ch04.html][4. Text versus Bytes]]
+
+    1. [[file:ch04.html#_character_issues][Character Issues]]
+    2. [[file:ch04.html#_byte_essentials][Byte Essentials]]
+
+       1. [[file:ch04.html#memoryview_sec2][Structs and Memory Views]]
+
+    3. [[file:ch04.html#_basic_encoders_decoders][Basic Encoders/Decoders]]
+    4. [[file:ch04.html#_understanding_encode_decode_problems][Understanding Encode/Decode Problems]]
+
+       1. [[file:ch04.html#_coping_with_unicodeencodeerror][Coping with UnicodeEncodeError]]
+       2. [[file:ch04.html#_coping_with_unicodedecodeerror][Coping with UnicodeDecodeError]]
+       3. [[file:ch04.html#_syntaxerror_when_loading_modules_with_unexpected_encoding][SyntaxError When Loading Modules with Unexpected Encoding]]
+       4. [[file:ch04.html#discover_encoding][How to Discover the Encoding of a Byte Sequence]]
+       5. [[file:ch04.html#_bom_a_useful_gremlin][BOM: A Useful Gremlin]]
+
+    5. [[file:ch04.html#_handling_text_files][Handling Text Files]]
+
+       1. [[file:ch04.html#_encoding_defaults_a_madhouse][Encoding Defaults: A Madhouse]]
+
+    6. [[file:ch04.html#normalizing_unicode][Normalizing Unicode for Saner Comparisons]]
+
+       1. [[file:ch04.html#_case_folding][Case Folding]]
+       2. [[file:ch04.html#_utility_functions_for_normalized_text_matching][Utility Functions for Normalized Text Matching]]
+       3. [[file:ch04.html#_extreme_normalization_taking_out_diacritics][Extreme “Normalization”: Taking Out Diacritics]]
+
+    7. [[file:ch04.html#_sorting_unicode_text][Sorting Unicode Text]]
+
+       1. [[file:ch04.html#_sorting_with_the_unicode_collation_algorithm][Sorting with the Unicode Collation Algorithm]]
+
+    8. [[file:ch04.html#unicodedata_sec][The Unicode Database]]
+    9. [[file:ch04.html#_dual_mode_str_and_bytes_apis][Dual-Mode str and bytes APIs]]
+
+       1. [[file:ch04.html#_str_versus_bytes_in_regular_expressions][str Versus bytes in Regular Expressions]]
+       2. [[file:ch04.html#_str_versus_bytes_on_os_functions][str Versus bytes on os Functions]]
+
+    10. [[file:ch04.html#_chapter_summary_4][Chapter Summary]]
+    11. [[file:ch04.html#_further_reading_2][Further Reading]]
+
++ [[file:pt03.html][III. Functions as Objects]]
+
+  - [[file:ch05.html][5. First-Class Functions]]
+
+    1. [[file:ch05.html#_treating_a_function_like_an_object][Treating a Function Like an Object]]
+    2. [[file:ch05.html#_higher_order_functions][Higher-Order Functions]]
+
+       1. [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]]
+
+    3. [[file:ch05.html#_anonymous_functions][Anonymous Functions]]
+    4. [[file:ch05.html#_the_seven_flavors_of_callable_objects][The Seven Flavors of Callable Objects]]
+    5. [[file:ch05.html#user_callables][User-Defined Callable Types]]
+    6. [[file:ch05.html#_function_introspection][Function Introspection]]
+    7. [[file:ch05.html#_from_positional_to_keyword_only_parameters][From Positional to Keyword-Only Parameters]]
+    8. [[file:ch05.html#_retrieving_information_about_parameters][Retrieving Information About Parameters]]
+    9. [[file:ch05.html#func_annot_sec][Function Annotations]]
+    10. [[file:ch05.html#_packages_for_functional_programming][Packages for Functional Programming]]
+
+        1. [[file:ch05.html#operator_module_section][The operator Module]]
+        2. [[file:ch05.html#functools_partial_sec][Freezing Arguments with functools.partial]]
+
+    11. [[file:ch05.html#_chapter_summary_5][Chapter Summary]]
+    12. [[file:ch05.html#_further_reading_3][Further Reading]]
+
+  - [[file:ch06.html][6. Design Patterns with First-Class Functions]]
+
+    1. [[file:ch06.html#strategy_case_study][Case Study: Refactoring Strategy]]
+
+       1. [[file:ch06.html#_classic_strategy][Classic Strategy]]
+       2. [[file:ch06.html#pythonic_strategy][Function-Oriented Strategy]]
+       3. [[file:ch06.html#_choosing_the_best_strategy_simple_approach][Choosing the Best Strategy: Simple Approach]]
+       4. [[file:ch06.html#_finding_strategies_in_a_module][Finding Strategies in a Module]]
+
+    2. [[file:ch06.html#_command][Command]]
+    3. [[file:ch06.html#design_patterns_summary][Chapter Summary]]
+    4. [[file:ch06.html#dp_further][Further Reading]]
+
+  - [[file:ch07.html][7. Function Decorators and Closures]]
+
+    1. [[file:ch07.html#_decorators_101][Decorators 101]]
+    2. [[file:ch07.html#_when_python_executes_decorators][When Python Executes Decorators]]
+    3. [[file:ch07.html#_decorator_enhanced_strategy_pattern][Decorator-Enhanced Strategy Pattern]]
+    4. [[file:ch07.html#_variable_scope_rules][Variable Scope Rules]]
+    5. [[file:ch07.html#closures_sec][Closures]]
+    6. [[file:ch07.html#_the_nonlocal_declaration][The nonlocal Declaration]]
+    7. [[file:ch07.html#_implementing_a_simple_decorator][Implementing a Simple Decorator]]
+
+       1. [[file:ch07.html#_how_it_works][How It Works]]
+
+    8. [[file:ch07.html#_decorators_in_the_standard_library][Decorators in the Standard Library]]
+
+       1. [[file:ch07.html#_memoization_with_functools_lru_cache][Memoization with functools.lru\_cache]]
+       2. [[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]]
+
+    9. [[file:ch07.html#_stacked_decorators][Stacked Decorators]]
+    10. [[file:ch07.html#_parameterized_decorators][Parameterized Decorators]]
+
+        1. [[file:ch07.html#_a_parameterized_registration_decorator][A Parameterized Registration Decorator]]
+        2. [[file:ch07.html#_the_parameterized_clock_decorator][The Parameterized Clock Decorator]]
+
+    11. [[file:ch07.html#_chapter_summary_6][Chapter Summary]]
+    12. [[file:ch07.html#decorator_further][Further Reading]]
+
++ [[file:pt04.html][IV. Object-Oriented Idioms]]
+
+  - [[file:ch08.html][8. Object References, Mutability, and Recycling]]
+
+    1. [[file:ch08.html#_variables_are_not_boxes][Variables Are Not Boxes]]
+    2. [[file:ch08.html#_identity_equality_and_aliases][Identity, Equality, and Aliases]]
+
+       1. [[file:ch08.html#_choosing_between_and_is][Choosing Between == and is]]
+       2. [[file:ch08.html#_the_relative_immutability_of_tuples][The Relative Immutability of Tuples]]
+
+    3. [[file:ch08.html#_copies_are_shallow_by_default][Copies Are Shallow by Default]]
+
+       1. [[file:ch08.html#deep_x_shallow_copies][Deep and Shallow Copies of Arbitrary Objects]]
+
+    4. [[file:ch08.html#_function_parameters_as_references][Function Parameters as References]]
+
+       1. [[file:ch08.html#_mutable_types_as_parameter_defaults_bad_idea][Mutable Types as Parameter Defaults: Bad Idea]]
+       2. [[file:ch08.html#defensive_argument][Defensive Programming with Mutable Parameters]]
+
+    5. [[file:ch08.html#_del_and_garbage_collection][del and Garbage Collection]]
+    6. [[file:ch08.html#weakref_sec][Weak References]]
+
+       1. [[file:ch08.html#_the_weakvaluedictionary_skit][The WeakValueDictionary Skit]]
+       2. [[file:ch08.html#_limitations_of_weak_references][Limitations of Weak References]]
+
+    7. [[file:ch08.html#_tricks_python_plays_with_immutables][Tricks Python Plays with Immutables]]
+    8. [[file:ch08.html#_chapter_summary_7][Chapter Summary]]
+    9. [[file:ch08.html#_further_reading_4][Further Reading]]
+
+  - [[file:ch09.html][9. A Pythonic Object]]
+
+    1. [[file:ch09.html#object_repr_sec][Object Representations]]
+    2. [[file:ch09.html#_vector_class_redux][Vector Class Redux]]
+    3. [[file:ch09.html#_an_alternative_constructor][An Alternative Constructor]]
+    4. [[file:ch09.html#classmethod_x_staticmethod_sec][classmethod Versus staticmethod]]
+    5. [[file:ch09.html#format_display_sec][Formatted Displays]]
+    6. [[file:ch09.html#hashable_vector2d][A Hashable Vector2d]]
+    7. [[file:ch09.html#private_protected_sec][Private and “Protected” Attributes in Python]]
+    8. [[file:ch09.html#slots_section][Saving Space with the \_\_slots\_\_ Class Attribute]]
+
+       1. [[file:ch09.html#problems_with_slots][The Problems with \_\_slots\_\_]]
+
+    9. [[file:ch09.html#overriding_class_attributes][Overriding Class Attributes]]
+    10. [[file:ch09.html#_chapter_summary_8][Chapter Summary]]
+    11. [[file:ch09.html#pythonic_further_reading][Further Reading]]
+
+  - [[file:ch10.html][10. Sequence Hacking, Hashing, and Slicing]]
+
+    1. [[file:ch10.html#_vector_a_user_defined_sequence_type][Vector: A User-Defined Sequence Type]]
+    2. [[file:ch10.html#vector_take1_sec][Vector Take #1: Vector2d Compatible]]
+    3. [[file:ch10.html#protocol_duck_section][Protocols and Duck Typing]]
+    4. [[file:ch10.html#sliceable_sequence][Vector Take #2: A Sliceable Sequence]]
+
+       1. [[file:ch10.html#how_slicing_works][How Slicing Works]]
+       2. [[file:ch10.html#_a_slice_aware_x5f_x5f_getitem_x5f_x5f][A Slice-Aware \_\_getitem\_\_]]
+
+    5. [[file:ch10.html#vector_dynamic_attrs_sec][Vector Take #3: Dynamic Attribute Access]]
+    6. [[file:ch10.html#multi_hashing][Vector Take #4: Hashing and a Faster ==]]
+    7. [[file:ch10.html#_vector_take_5_formatting][Vector Take #5: Formatting]]
+    8. [[file:ch10.html#_chapter_summary_9][Chapter Summary]]
+    9. [[file:ch10.html#_further_reading_5][Further Reading]]
+
+  - [[file:ch11.html][11. Interfaces: From Protocols to ABCs]]
+
+    1. [[file:ch11.html#_interfaces_and_protocols_in_python_culture][Interfaces and Protocols in Python Culture]]
+    2. [[file:ch11.html#python_digs_seq_sec][Python Digs Sequences]]
+    3. [[file:ch11.html#_monkey_patching_to_implement_a_protocol_at_runtime][Monkey-Patching to Implement a Protocol at Runtime]]
+    4. [[file:ch11.html#_alex_martelli_8217_s_waterfowl][Alex Martelli's Waterfowl]]
+    5. [[file:ch11.html#_subclassing_an_abc][Subclassing an ABC]]
+    6. [[file:ch11.html#abc_in_stdlib_sec][ABCs in the Standard Library]]
+
+       1. [[file:ch11.html#_abcs_in_collections_abc][ABCs in collections.abc]]
+       2. [[file:ch11.html#_the_numbers_tower_of_abcs][The Numbers Tower of ABCs]]
+
+    7. [[file:ch11.html#_defining_and_using_an_abc][Defining and Using an ABC]]
+
+       1. [[file:ch11.html#abc_syntax_section][ABC Syntax Details]]
+       2. [[file:ch11.html#_subclassing_the_tombola_abc][Subclassing the Tombola ABC]]
+       3. [[file:ch11.html#_a_virtual_subclass_of_tombola][A Virtual Subclass of Tombola]]
+
+    8. [[file:ch11.html#how_tombola_tested][How the Tombola Subclasses Were Tested]]
+    9. [[file:ch11.html#register_usage][Usage of register in Practice]]
+    10. [[file:ch11.html#subclasshook_sec][Geese Can Behave as Ducks]]
+    11. [[file:ch11.html#_chapter_summary_10][Chapter Summary]]
+    12. [[file:ch11.html#interfaces_further_reading][Further Reading]]
+
+  - [[file:ch12.html][12. Inheritance: For Good or For Worse]]
+
+    1. [[file:ch12.html#subclass_builtin_woes][Subclassing Built-In Types Is Tricky]]
+    2. [[file:ch12.html#mro_section][Multiple Inheritance and Method Resolution Order]]
+    3. [[file:ch12.html#_multiple_inheritance_in_the_real_world][Multiple Inheritance in the Real World]]
+    4. [[file:ch12.html#_coping_with_multiple_inheritance][Coping with Multiple Inheritance]]
+
+       1. [[file:ch12.html#_1_distinguish_interface_inheritance_from_implementation_inheritance][1. Distinguish Interface Inheritance from Implementation Inheritance]]
+       2. [[file:ch12.html#_2_make_interfaces_explicit_with_abcs][2. Make Interfaces Explicit with ABCs]]
+       3. [[file:ch12.html#_3_use_mixins_for_code_reuse][3. Use Mixins for Code Reuse]]
+       4. [[file:ch12.html#_4_make_mixins_explicit_by_naming][4. Make Mixins Explicit by Naming]]
+       5. [[file:ch12.html#_5_an_abc_may_also_be_a_mixin_the_reverse_is_not_true][5. An ABC May Also Be a Mixin; The Reverse Is Not True]]
+       6. [[file:ch12.html#_6_don_8217_t_subclass_from_more_than_one_concrete_class][6. Don't Subclass from More Than One Concrete Class]]
+       7. [[file:ch12.html#_7_provide_aggregate_classes_to_users][7. Provide Aggregate Classes to Users]]
+       8. [[file:ch12.html#_8_favor_object_composition_over_class_inheritance][8. “Favor Object Composition Over Class Inheritance.”]]
+       9. [[file:ch12.html#_tkinter_the_good_the_bad_and_the_ugly][Tkinter: The Good, the Bad, and the Ugly]]
+
+    5. [[file:ch12.html#django_cbv_sec][A Modern Example: Mixins in Django Generic Views]]
+    6. [[file:ch12.html#_chapter_summary_11][Chapter Summary]]
+    7. [[file:ch12.html#inheritance_further_reading][Further Reading]]
+
+  - [[file:ch13.html][13. Operator Overloading: Doing It Right]]
+
+    1. [[file:ch13.html#op_overloading_101_sec][Operator Overloading 101]]
+    2. [[file:ch13.html#_unary_operators][Unary Operators]]
+    3. [[file:ch13.html#overloading_plus_sec][Overloading + for Vector Addition]]
+    4. [[file:ch13.html#_overloading_for_scalar_multiplication][Overloading * for Scalar Multiplication]]
+    5. [[file:ch13.html#rich_comp_op_sec][Rich Comparison Operators]]
+    6. [[file:ch13.html#augmented_assign_ops][Augmented Assignment Operators]]
+    7. [[file:ch13.html#_chapter_summary_12][Chapter Summary]]
+    8. [[file:ch13.html#_further_reading_6][Further Reading]]
+
++ [[file:pt05.html][V. Control Flow]]
+
+  - [[file:ch14.html][14. Iterables, Iterators, and Generators]]
+
+    1. [[file:ch14.html#_sentence_take_1_a_sequence_of_words][Sentence Take #1: A Sequence of Words]]
+
+       1. [[file:ch14.html#iter_func_sec][Why Sequences Are Iterable: The iter Function]]
+
+    2. [[file:ch14.html#_iterables_versus_iterators][Iterables Versus Iterators]]
+    3. [[file:ch14.html#_sentence_take_2_a_classic_iterator][Sentence Take #2: A Classic Iterator]]
+
+       1. [[file:ch14.html#_making_sentence_an_iterator_bad_idea][Making Sentence an Iterator: Bad Idea]]
+
+    4. [[file:ch14.html#_sentence_take_3_a_generator_function][Sentence Take #3: A Generator Function]]
+
+       1. [[file:ch14.html#_how_a_generator_function_works][How a Generator Function Works]]
+
+    5. [[file:ch14.html#_sentence_take_4_a_lazy_implementation][Sentence Take #4: A Lazy Implementation]]
+    6. [[file:ch14.html#_sentence_take_5_a_generator_expression][Sentence Take #5: A Generator Expression]]
+    7. [[file:ch14.html#_generator_expressions_when_to_use_them][Generator Expressions: When to Use Them]]
+    8. [[file:ch14.html#_another_example_arithmetic_progression_generator][Another Example: Arithmetic Progression Generator]]
+
+       1. [[file:ch14.html#ap_itertools_sec][Arithmetic Progression with itertools]]
+
+    9. [[file:ch14.html#stdlib_generators][Generator Functions in the Standard Library]]
+    10. [[file:ch14.html#yield_from_sec0][New Syntax in Python 3.3: yield from]]
+    11. [[file:ch14.html#iterable_reducing_sec][Iterable Reducing Functions]]
+    12. [[file:ch14.html#iter_closer_look][A Closer Look at the iter Function]]
+    13. [[file:ch14.html#generator_case_study][Case Study: Generators in a Database Conversion Utility]]
+    14. [[file:ch14.html#_generators_as_coroutines][Generators as Coroutines]]
+    15. [[file:ch14.html#_chapter_summary_13][Chapter Summary]]
+    16. [[file:ch14.html#_further_reading_7][Further Reading]]
+
+  - [[file:ch15.html][15. Context Managers and else Blocks]]
+
+    1. [[file:ch15.html#_do_this_then_that_else_blocks_beyond_if][Do This, Then That: else Blocks Beyond if]]
+    2. [[file:ch15.html#_context_managers_and_with_blocks][Context Managers and with Blocks]]
+    3. [[file:ch15.html#_the_contextlib_utilities][The contextlib Utilities]]
+    4. [[file:ch15.html#_using_contextmanager][Using @contextmanager]]
+    5. [[file:ch15.html#_chapter_summary_14][Chapter Summary]]
+    6. [[file:ch15.html#further_reading_context_sec][Further Reading]]
+
+  - [[file:ch16.html][16. Coroutines]]
+
+    1. [[file:ch16.html#_how_coroutines_evolved_from_generators][How Coroutines Evolved from Generators]]
+    2. [[file:ch16.html#coro_basic_sec][Basic Behavior of a Generator Used as a Coroutine]]
+    3. [[file:ch16.html#_example_coroutine_to_compute_a_running_average][Example: Coroutine to Compute a Running Average]]
+    4. [[file:ch16.html#priming_decorator_sec][Decorators for Coroutine Priming]]
+    5. [[file:ch16.html#coro_termination_sec][Coroutine Termination and Exception Handling]]
+    6. [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]]
+    7. [[file:ch16.html#coro_yield_from_sec][Using yield from]]
+    8. [[file:ch16.html#yield_from_meaning_sec][The Meaning of yield from]]
+    9. [[file:ch16.html#_use_case_coroutines_for_discrete_event_simulation][Use Case: Coroutines for Discrete Event Simulation]]
+
+       1. [[file:ch16.html#_about_discrete_event_simulations][About Discrete Event Simulations]]
+       2. [[file:ch16.html#taxi_sim_sec][The Taxi Fleet Simulation]]
+
+    10. [[file:ch16.html#coroutines_chapter_summary][Chapter Summary]]
+    11. [[file:ch16.html#further_reading_coro_sec][Further Reading]]
+
+  - [[file:ch17.html][17. Concurrency with Futures]]
+
+    1. [[file:ch17.html#ex_web_downloads_sec][Example: Web Downloads in Three Styles]]
+
+       1. [[file:ch17.html#_a_sequential_download_script][A Sequential Download Script]]
+       2. [[file:ch17.html#_downloading_with_concurrent_futures][Downloading with concurrent.futures]]
+       3. [[file:ch17.html#where_futures_sec][Where Are the Futures?]]
+
+    2. [[file:ch17.html#_blocking_i_o_and_the_gil][Blocking I/O and the GIL]]
+    3. [[file:ch17.html#_launching_processes_with_concurrent_futures][Launching Processes with concurrent.futures]]
+    4. [[file:ch17.html#_experimenting_with_executor_map][Experimenting with Executor.map]]
+    5. [[file:ch17.html#flags2_sec][Downloads with Progress Display and Error Handling]]
+
+       1. [[file:ch17.html#_error_handling_in_the_flags2_examples][Error Handling in the flags2 Examples]]
+       2. [[file:ch17.html#using_futures_as_completed_sec][Using futures.as\_completed]]
+       3. [[file:ch17.html#_threading_and_multiprocessing_alternatives][Threading and Multiprocessing Alternatives]]
+
+    6. [[file:ch17.html#_chapter_summary_15][Chapter Summary]]
+    7. [[file:ch17.html#_further_reading_8][Further Reading]]
+
+  - [[file:ch18.html][18. Concurrency with asyncio]]
+
+    1. [[file:ch18.html#_thread_versus_coroutine_a_comparison][Thread Versus Coroutine: A Comparison]]
+
+       1. [[file:ch18.html#asyncio_futures_sec][asyncio.Future: Nonblocking by Design]]
+       2. [[file:ch18.html#_yielding_from_futures_tasks_and_coroutines][Yielding from Futures, Tasks, and Coroutines]]
+
+    2. [[file:ch18.html#flags_asyncio_sec][Downloading with asyncio and aiohttp]]
+    3. [[file:ch18.html#around_blocking_calls_sec][Running Circling Around Blocking Calls]]
+    4. [[file:ch18.html#flags2_asyncio_sec][Enhancing the asyncio downloader Script]]
+
+       1. [[file:ch18.html#_using_asyncio_as_completed][Using asyncio.as\_completed]]
+       2. [[file:ch18.html#asyncio_run_in_executor_sec][Using an Executor to Avoid Blocking the Event Loop]]
+
+    5. [[file:ch18.html#callbacks2coros][From Callbacks to Futures and Coroutines]]
+
+       1. [[file:ch18.html#_doing_multiple_requests_for_each_download][Doing Multiple Requests for Each Download]]
+
+    6. [[file:ch18.html#_writing_asyncio_servers][Writing asyncio Servers]]
+
+       1. [[file:ch18.html#_an_asyncio_tcp_server][An asyncio TCP Server]]
+       2. [[file:ch18.html#_an_aiohttp_web_server][An aiohttp Web Server]]
+       3. [[file:ch18.html#_smarter_clients_for_better_concurrency][Smarter Clients for Better Concurrency]]
+
+    7. [[file:ch18.html#_chapter_summary_16][Chapter Summary]]
+    8. [[file:ch18.html#_further_reading_9][Further Reading]]
+
++ [[file:pt06.html][VI. Metaprogramming]]
+
+  - [[file:ch19.html][19. Dynamic Attributes and Properties]]
+
+    1. [[file:ch19.html#_data_wrangling_with_dynamic_attributes][Data Wrangling with Dynamic Attributes]]
+
+       1. [[file:ch19.html#_exploring_json_like_data_with_dynamic_attributes][Exploring JSON-Like Data with Dynamic Attributes]]
+       2. [[file:ch19.html#dynamic_names_sec][The Invalid Attribute Name Problem]]
+       3. [[file:ch19.html#flexible_new_sec][Flexible Object Creation with \_\_new\_\_]]
+       4. [[file:ch19.html#_restructuring_the_oscon_feed_with_shelve][Restructuring the OSCON Feed with shelve]]
+       5. [[file:ch19.html#oscon_schedule2_sec][Linked Record Retrieval with Properties]]
+
+    2. [[file:ch19.html#prop_validation_sec][Using a Property for Attribute Validation]]
+
+       1. [[file:ch19.html#_lineitem_take_1_class_for_an_item_in_an_order][LineItem Take #1: Class for an Item in an Order]]
+       2. [[file:ch19.html#_lineitem_take_2_a_validating_property][LineItem Take #2: A Validating Property]]
+
+    3. [[file:ch19.html#_a_proper_look_at_properties][A Proper Look at Properties]]
+
+       1. [[file:ch19.html#prop_override_instance][Properties Override Instance Attributes]]
+       2. [[file:ch19.html#_property_documentation][Property Documentation]]
+
+    4. [[file:ch19.html#coding_prop_factory_sec][Coding a Property Factory]]
+    5. [[file:ch19.html#attribute_deletion_sec][Handling Attribute Deletion]]
+    6. [[file:ch19.html#_essential_attributes_and_functions_for_attribute_handling][Essential Attributes and Functions for Attribute Handling]]
+
+       1. [[file:ch19.html#_special_attributes_that_affect_attribute_handling][Special Attributes that Affect Attribute Handling]]
+       2. [[file:ch19.html#bif_attribute_handling][Built-In Functions for Attribute Handling]]
+       3. [[file:ch19.html#special_methods_for_attr_sec][Special Methods for Attribute Handling]]
+
+    7. [[file:ch19.html#_chapter_summary_17][Chapter Summary]]
+    8. [[file:ch19.html#_further_reading_10][Further Reading]]
+
+  - [[file:ch20.html][20. Attribute Descriptors]]
+
+    1. [[file:ch20.html#_descriptor_example_attribute_validation][Descriptor Example: Attribute Validation]]
+
+       1. [[file:ch20.html#_lineitem_take_3_a_simple_descriptor][LineItem Take #3: A Simple Descriptor]]
+       2. [[file:ch20.html#auto_storage_sec][LineItem Take #4: Automatic Storage Attribute Names]]
+       3. [[file:ch20.html#new_descr_type_sec][LineItem Take #5: A New Descriptor Type]]
+
+    2. [[file:ch20.html#_overriding_versus_nonoverriding_descriptors][Overriding Versus Nonoverriding Descriptors]]
+
+       1. [[file:ch20.html#_overriding_descriptor][Overriding Descriptor]]
+       2. [[file:ch20.html#_overriding_descriptor_without_x5f_x5f_get_x5f_x5f][Overriding Descriptor Without \_\_get\_\_]]
+       3. [[file:ch20.html#_nonoverriding_descriptor][Nonoverriding Descriptor]]
+       4. [[file:ch20.html#_overwriting_a_descriptor_in_the_class][Overwriting a Descriptor in the Class]]
+
+    3. [[file:ch20.html#_methods_are_descriptors][Methods Are Descriptors]]
+    4. [[file:ch20.html#descriptor_usage_sec][Descriptor Usage Tips]]
+    5. [[file:ch20.html#_descriptor_docstring_and_overriding_deletion][Descriptor docstring and Overriding Deletion]]
+    6. [[file:ch20.html#_chapter_summary_18][Chapter Summary]]
+    7. [[file:ch20.html#_further_reading_11][Further Reading]]
+
+  - [[file:ch21.html][21. Class Metaprogramming]]
+
+    1. [[file:ch21.html#_a_class_factory][A Class Factory]]
+    2. [[file:ch21.html#_a_class_decorator_for_customizing_descriptors][A Class Decorator for Customizing Descriptors]]
+    3. [[file:ch21.html#_what_happens_when_import_time_versus_runtime][What Happens When: Import Time Versus Runtime]]
+
+       1. [[file:ch21.html#evaltime_exer_sec][The Evaluation Time Exercises]]
+
+          1. [[file:ch21.html#scenario_1_sol_sec][Solution for scenario #1]]
+          2. [[file:ch21.html#_solution_for_scenario_2][Solution for scenario #2]]
+
+    4. [[file:ch21.html#_metaclasses_101][Metaclasses 101]]
+
+       1. [[file:ch21.html#_the_metaclass_evaluation_time_exercise][The Metaclass Evaluation Time Exercise]]
+
+          1. [[file:ch21.html#_solution_for_scenario_3][Solution for scenario #3]]
+          2. [[file:ch21.html#_solution_for_scenario_4][Solution for scenario #4]]
+
+    5. [[file:ch21.html#_a_metaclass_for_customizing_descriptors][A Metaclass for Customizing Descriptors]]
+    6. [[file:ch21.html#_the_metaclass_x5f_x5f_prepare_x5f_x5f_special_method][The Metaclass \_\_prepare\_\_ Special Method]]
+    7. [[file:ch21.html#anatomy_of_classes][Classes as Objects]]
+    8. [[file:ch21.html#_chapter_summary_19][Chapter Summary]]
+    9. [[file:ch21.html#ch21-furtherreading][Further Reading]]
+
+  - [[file:pr03.html][Afterword]]
+
+    1. [[file:pr03.html#_further_reading_12][Further Reading]]
+
+  - [[file:apa.html][A. Support Scripts]]
+
+    1. [[file:apa.html#_chapter_3_in_operator_performance_test][Chapter 3: in Operator Performance Test]]
+    2. [[file:apa.html#_chapter_3_compare_the_bit_patterns_of_hashes][Chapter 3: Compare the Bit Patterns of Hashes]]
+    3. [[file:apa.html#memtest_script][Chapter 9: RAM Usage With and Without \_\_slots\_\_]]
+    4. [[file:apa.html#_chapter_14_isis2json_py_database_conversion_script][Chapter 14: isis2json.py Database Conversion Script]]
+    5. [[file:apa.html#_chapter_16_taxi_fleet_discrete_event_simulation][Chapter 16: Taxi Fleet Discrete Event Simulation]]
+    6. [[file:apa.html#_chapter_17_cryptographic_examples][Chapter 17: Cryptographic Examples]]
+    7. [[file:apa.html#_chapter_17_flags2_http_client_examples][Chapter 17: flags2 HTTP Client Examples]]
+    8. [[file:apa.html#oscon_schedule2_sec_scripts_appendix][Chapter 19: OSCON Schedule Scripts and Tests]]
+
+  - [[file:go01.html][Python Jargon]]
+
++ [[file:ix01.html][Index]]
++ [[file:co01.html][Colophon]]
++ [[file:copyright.html][Copyright]]

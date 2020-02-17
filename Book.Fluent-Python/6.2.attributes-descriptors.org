@@ -1,0 +1,1009 @@
+* Chapter 20. Attribute Descriptors
+
+
+The =FrozenJSON= class in [[file:ch19.html#ex_explore1][Example 19-6]] is safe from instance attribute shadowing methods because its only methods are special methods and the =build= class method. Class methods are safe as long as they are always accessed through the class, as I did with =FrozenJSON.build= in [[file:ch19.html#ex_explore1][Example 19-6]]---later replaced by =__new__= in [[file:ch19.html#ex_explore2][Example 19-7]]. The =Record= class (Examples [[file:ch19.html#ex_schedule1][19-9]] and [[file:ch19.html#ex_schedule2_record][19-11]]) and subclasses are also safe: they use only special methods, class methods, static methods, and properties. Properties are data descriptors, so cannot be overridden by instance attributes.
+
+To close this chapter, we'll cover two features we saw with properties that we have not addressed in the context of descriptors: documentation and handling attempts to delete a managed attribute.
+
+** Descriptor docstring and Overriding Deletion
+
+
+The docstring of a descriptor class is used to document every instance of the descriptor in the managed class. See [[file:ch20.html#descriptor_help_screens][Figure 20-6]] for the help displays for the =LineItem= class with the =Quantity= and =NonBlank= descriptors from Examples [[file:ch20.html#model_v5][20-6]] and [[file:ch20.html#lineitem_class_v5][20-7]].
+
+
+
+[[file:images/flup_2006.png.jpg]]
+
+Figure 20-6. Screenshots of the Python console when issuing the commands help(LineItem.weight) and help(LineItem)
+
+That is somewhat unsatisfactory. In the case of =LineItem=, it would be good to add, for example, the information that =weight= must be in kilograms. That would be trivial with properties, because each property handles a specific managed attribute. But with descriptors, the same =Quantity= descriptor class is used for =weight= and =price=.^{[[[#ftn.id1094714][192]]]}
+
+The second detail we discussed with properties but have not addressed with descriptors is handling attempts to delete a managed attribute. That can be done by implementing a =__delete__= method alongside or instead of the usual =__get__= and/or =__set__= in the descriptor class. Coding a silly descriptor class with =__delete__= is left as an exercise to the leisurely reader.
+
+** Chapter Summary
+
+
+The first example of this chapter was a continuation of the =LineItem= examples from [[file:ch19.html][Chapter 19]]. In [[file:ch20.html#lineitem_class_v3][Example 20-1]], we replaced properties with descriptors. We saw that a descriptor is a class that provides instances that are deployed as attributes in the managed class. Discussing this mechanism required special terminology, introducing terms such as managed instance and storage attribute.
+
+In [[file:ch20.html#auto_storage_sec][LineItem Take #4: Automatic Storage Attribute Names]], we removed the requirement that =Quantity= descriptors were declared with an explicit =storage_name=, which was redundant and error-prone, because that name should always match the attribute name on the left of the assignment in the descriptor instantiation. The solution was to generate unique =storage_names= by combining the descriptor class name with a counter at the class level (e.g., ='_Quantity#1'=).
+
+Next, we compared the code size, strengths, and weaknesses of a descriptor class with a property factory built on functional programming idioms. The latter works perfectly well and is simpler in some ways, but the former is more flexible and is the standard solution. A key advantage of the descriptor class was exploited in [[file:ch20.html#new_descr_type_sec][LineItem Take #5: A New Descriptor Type]]: subclassing to share code while building specialized descriptors with some common functionality.
+
+We then looked at the different behavior of descriptors providing or omitting the =__set__= method, making the crucial distinction between overriding and non-overriding descriptors. Through detailed testing we uncovered when descriptors are in control and when they are shadowed, bypassed, or overwritten.
+
+Following that, we studied a particular category of nonoverriding descriptors: methods. Console testing revealed how a function attached to a class becomes a method when accessed through an instance, by leveraging the descriptor protocol.
+
+To conclude the chapter, [[file:ch20.html#descriptor_usage_sec][Descriptor Usage Tips]] provided a brief look at how descriptor deletion and documentation work.
+
+Throughout this chapter, we faced a few issues that only class metaprogramming can solve, and we deferred those to [[file:ch21.html][Chapter 21]].
+
+** Further Reading
+
+
+Besides the obligatory reference to the [[http://bit.ly/1GsZwss][“Data Model” chapter]], Raymond Hettinger's [[http://bit.ly/1HGwlS3][Descriptor HowTo Guide]] is a valuable resource---part of the [[http://bit.ly/1HGwnsV][HowTo collection]] in the official Python documentation.
+
+As usual with Python object model subjects, Alex Martelli's /Python in a Nutshell/, 2E (O'Reilly) is authoritative and objective, even if somewhat dated: the key mechanisms discussed in this chapter were introduced in Python 2.2, long before the 2.5 version covered by that book. Martelli also has a presentation titled /Python's Object Model/, which covers properties and descriptors in depth ([[http://bit.ly/1HGwoxa][slides]], [[http://bit.ly/1HGwp46][video]]). Highly recommended.
+
+For Python 3 coverage with practical examples, /Python Cookbook, 3E/ by David Beazley and Brian K. Jones (O'Reilly), has many recipes illustrating descriptors, of which I want to highlight “6.12. Reading Nested and Variable-Sized Binary Structures,” “8.10. Using Lazily Computed Properties,” “8.13. Implementing a Data Model or Type System,” and “9.9. Defining Decorators As Classes”---the latter of which addresses deep issues with the interaction of function decorators, descriptors, and methods, explaining how a function decorator implemented as a class with =__call__= also needs to implement =__get__= if it wants to work with decorating methods as well as functions.
+
+Soapbox
+
+*The Problem with self*
+
+“Worse is Better” is a design philosophy described by Richard P. Gabriel in [[http://bit.ly/1HGwvIZ][“The Rise of Worse is Better”]]. The first priority of this philosophy is “Simplicity,” which Gabriel states as:
+
+#+BEGIN_QUOTE
+  The design must be simple, both in implementation and interface. It is more important for the implementation to be simple than the interface. Simplicity is the most important consideration in a design.
+#+END_QUOTE
+
+I believe the requirement to explicitly declare =self= as a first argument in methods is an application of “Worse is Better” in Python. The implementation is simple---elegant even---at the expense of the user interface: a method signature like =def zfill(self, width):= doesn't visually match the invocation =pobox.zfill(8)=.
+
+Modula-3 introduced that convention---and the use of the =self= identifier---but there is a difference: in Modula-3, interfaces are declared separately from their implementation, and in the interface declaration the =self= argument is omitted, so from the user's perspective, a method appears in an interface declaration exactly with the same number of explicit arguments it takes.
+
+One improvement in this regard has been the error messages: for a user-defined method with one argument besides =self=, if the user invokes =obj.meth()=, Python 2.7 raises =TypeError: meth() takes exactly 2 arguments (1 given)=, but in Python 3.4 the message is less confusing, sidestepping the issue of the argument count and naming the missing argument: =meth() missing 1 required positional argument: 'x'=.
+
+Besides the use of =self= as an explicit argument, the requirement to qualify all access to instance attributes with =self= is also criticized.^{[[[#ftn.id1095053][193]]]} I personally don't mind typing the =self= qualifier: it's good to distinguish local variables from attributes. My issue is with the use of self in the =def= statement. But I got used to it.
+
+Anyone who is unhappy about the explicit =self= in Python can feel a lot better by considering the baffling semantics of the implicit =this= in JavaScript. Guido had some good reasons to make =self= work as it does, and he wrote about them in [[http://bit.ly/1CAyiQY][“Adding Support for User-Defined Classes”]], a post on his blog, The History of Python.
+
+
+
+--------------
+
+
+^{[[[#id1032822][187]]]} Raymond Hettinger, [[https://docs.python.org/3/howto/descriptor.html][Descriptor HowTo Guide]].
+
+
+^{[[[#id1033410][188]]]} Classes and instances are drawn as rectangles in UML class diagrams. There are visual differences, but instances are rarely shown in class diagrams, so developers may not recognize them as such.
+
+
+^{[[[#id1034415][189]]]} White truffles cost thousands of dollars per pound. Disallowing the sale of truffles for $0.01 is left as an exercise for the enterprising reader. I know a person who actually bought an $1,800 encyclopedia of statistics for $18 because of an error in an online store (not Amazon.com).
+
+
+^{[[[#id1039013][190]]]} Gamma et al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 326.
+
+
+^{[[[#id1094347][191]]]} Python is not consistent in such messages. Trying to change the =c.real= attribute of a =complex= number gets =AttributeError: read-only attribute=, but an attempt to change =c.conjugate= (a method of =complex=), results in =AttributeError: 'complex' object attribute 'conjugate' is read-only=.
+
+
+^{[[[#id1094714][192]]]} Customizing the help text for each descriptor instance is surprisingly hard. One solution requires dynamically building a wrapper class for each descriptor instance.
+
+
+^{[[[#id1095053][193]]]} See, for example, A. M. Kuchling's famous /Python Warts/ post [[http://bit.ly/1cPSaDh][(archived)]]; Kuchling himself is not so bothered by the =self= qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+
+here are visual differences, but instances are rarely shown in class diagrams, so developers may not recognize them as such.
+
+
+^{[[[#id1034415][189]]]} White truffles cost thousands of dollars per pound. Disallowing the sale of truffles for $0.01 is left as an exercise for the enterprising reader. I know a person who actually bought an $1,800 encyclopedia of statistics for $18 because of an error in an online store (not Amazon.com).
+
+
+^{[[[#id1039013][190]]]} Gamma et al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 326.
+
+
+^{[[[#id1094347][191]]]} Python is not consistent in such messages. Trying to change the =c.real= attribute of a =complex= number gets =AttributeError: read-only attribute=, but an attempt to change =c.conjugate= (a method of =complex=), results in =AttributeError: 'complex' object attribute 'conjugate' is read-only=.
+
+
+^{[[[#id1094714][192]]]} Customizing the help text for each descriptor instance is surprisingly hard. One solution requires dynamically building a wrapper class for each descriptor instance.
+
+
+^{[[[#id1095053][193]]]} See, for example, A. M. Kuchling's famous /Python Warts/ post [[http://bit.ly/1cPSaDh][(archived)]]; Kuchling himself is not so bothered by the =self= qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+
+qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+
+roblem is that---as we saw in [[file:ch08.html][Chapter 8]]---the righthand side of an assignment is executed before the variable exists. The expression =Quantity()= is evaluated to create a descriptor instance, and at this time there is no way the code in the =Quantity= class can guess the name of the variable to which the descriptor will be bound (e.g., =weight= or =price=).
+
+As it stands, [[file:ch20.html#lineitem_class_v3][Example 20-1]] requires naming each =Quantity= explicitly, which is not only inconvenient but dangerous: if a programmer copy and pasting code forgets to edit both names and writes something like =price = Quantity('weight')=, the program will misbehave badly, clobbering the value of =weight= whenever the =price= is set.
+
+A not-so-elegant but workable solution to the repeated name problem is presented next. Better solutions require either a class decorator or a metaclass, so I'll leave them for [[file:ch21.html][Chapter 21]].
+
+*** LineItem Take #4: Automatic Storage Attribute Names
+    :PROPERTIES:
+    :CUSTOM_ID: auto_storage_sec
+    :CLASS: title
+    :END:
+
+To avoid retyping the attribute name in the descriptor declarations, we'll generate a unique string for the =storage_name= of each =Quantity= instance. [[file:ch20.html#lineitem4_uml][Figure 20-4]] shows the updated UML diagram for the =Quantity= and =LineItem= classes.
+
+
+
+[[file:images/flup_2004.png]]
+
+Figure 20-4. UML class diagram for [[file:ch20.html#lineitem_class_v4][Example 20-2]]. Now Quantity has both /get/ and /set/ methods, and LineItem instances have storage attributes with generated names: _Quantity#0 and _Quantity#1.
+
+To generate the =storage_name=, we start with a ='_Quantity#'= prefix and concatenate an integer: the current value of a =Quantity.__counter= class attribute that we'll increment every time a new =Quantity= descriptor instance is attached to a class. Using the hash character in the prefix guarantees the =storage_name= will not clash with attributes created by the user using dot notation, because =nutmeg._Quantity#0= is not valid Python syntax. But we can always get and set attributes with such “invalid” identifiers using the =getattr= and =setattr= built-in functions, or by poking the instance =__dict__=. [[file:ch20.html#lineitem_class_v4][Example 20-2]] shows the new implementation.
+
+
+
+Example 20-2. bulkfood_v4.py: each Quantity descriptor gets a unique storage_name
+
+#+BEGIN_EXAMPLE
+    class Quantity:
+        __counter = 0   
+
+        def __init__(self):
+            cls = self.__class__   
+            prefix = cls.__name__
+            index = cls.__counter
+            self.storage_name = '_{}#{}'.format(prefix, index)   
+            cls.__counter += 1   
+
+        def __get__(self, instance, owner):   
+            return getattr(instance, self.storage_name)   
+
+        def __set__(self, instance, value):
+            if value > 0:
+                setattr(instance, self.storage_name, value)   
+            else:
+                raise ValueError('value must be > 0')
+
+
+    class LineItem:
+        weight = Quantity()   
+        price = Quantity()
+
+        def __init__(self, description, weight, price):
+            self.description = description
+            self.weight = weight
+            self.price = price
+
+        def subtotal(self):
+            return self.weight * self.price
+#+END_EXAMPLE
+
+- [[#CO239-1][[[file:callouts/1.png]]]]  :: =__counter= is a class attribute of =Quantity=, counting the number of =Quantity= instances.
+
+- [[#CO239-2][[[file:callouts/2.png]]]]  :: =cls= is a reference to the =Quantity= class.
+
+- [[#CO239-3][[[file:callouts/3.png]]]]  :: The =storage_name= for each descriptor instance is unique because it's built from the descriptor class name and the current =__counter= value (e.g., =_Quantity#0=).
+
+- [[#CO239-4][[[file:callouts/4.png]]]]  :: Increment =__counter=.
+
+- [[#CO239-5][[[file:callouts/5.png]]]]  :: We need to implement =__get__= because the name of the managed attribute is not the same as the =storage_name=. The =owner= argument will be explained shortly.
+
+- [[#CO239-6][[[file:callouts/6.png]]]]  :: Use the =getattr= built-in function to retrieve the value from the =instance=.
+
+- [[#CO239-7][[[file:callouts/7.png]]]]  :: Use the =setattr= built-in to store the value in the =instance=.
+
+- [[#CO239-8][[[file:callouts/8.png]]]]  :: Now we don't need to pass the managed attribute name to the =Quantity= constructor. That was the goal for this version.
+
+Here we can use the higher-level =getattr= and =setattr= built-ins to store the value---instead of resorting to =instance.__dict__=---because the managed attribute and the storage attribute have different names, so calling =getattr= on the storage attribute will not trigger the descriptor, avoiding the infinite recursion discussed in [[file:ch20.html#lineitem_class_v3][Example 20-1]].
+
+If you test /bulkfood_v4.py/, you can see that the =weight= and =price= descriptors work as expected, and the storage attributes can also be read directly, which is useful for debugging:
+
+#+BEGIN_EXAMPLE
+    >>> from bulkfood_v4 import LineItem
+    >>> coconuts = LineItem('Brazilian coconut', 20, 17.95)
+    >>> coconuts.weight, coconuts.price
+    (20, 17.95)
+    >>> getattr(raisins, '_Quantity#0'), getattr(raisins, '_Quantity#1')
+    (20, 17.95)
+#+END_EXAMPLE
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note
+    :CLASS: title
+    :END:
+
+If we wanted to follow the convention Python uses to do name mangling (e.g., =_LineItem__quantity0=) we'd have to know the name of the managed class (i.e., =LineItem=), but the body of a class definition runs before the class itself is built by the interpreter, so we don't have that information when each descriptor instance is created. However, in this case, there is no need to include the managed class name to avoid accidental overwriting in subclasses: the descriptor class =__counter= will be incremented every time a new descriptor is instantiated, guaranteeing that each storage name will be unique across all managed classes.
+
+Note that =__get__= receives three arguments: =self=, =instance=, and =owner=. The =owner= argument is a reference to the managed class (e.g., =LineItem=), and it's handy when the descriptor is used to get attributes from the class. If a managed attribute, such as =weight=, is retrieved via the class like =LineItem.weight=, the descriptor =__get__= method receives =None= as the value for the =instance= argument. This explains the =Attribute= error in the next console session:
+
+#+BEGIN_EXAMPLE
+    >>> from bulkfood_v4 import LineItem
+    >>> LineItem.weight
+    Traceback (most recent call last):
+      ...
+      File ".../descriptors/bulkfood_v4.py", line 54, in __get__
+        return getattr(instance, self.storage_name)
+    AttributeError: 'NoneType' object has no attribute '_Quantity#0'
+#+END_EXAMPLE
+
+Raising =AttributeError= is an option when implementing =__get__=, but if you choose to do so, the message should be fixed to remove the confusing mention of =NoneType= and =_Quantity#0=, which are implementation details. A better message would be ="'LineItem' class has no such attribute"=. Ideally, the name of the missing attribute should be spelled out, but the descriptor doesn't know the name of the managed attribute in this example, so we can't do better at this point.
+
+On the other hand, to support introspection and other metaprogramming tricks by the user, it's a good practice to make =__get__= return the descriptor instance when the managed attribute is accessed through the class. [[file:ch20.html#lineitem_class_v4b][Example 20-3]] is a minor variation of [[file:ch20.html#lineitem_class_v4][Example 20-2]], adding a bit of logic to =Quantity.__get__=.
+
+
+
+Example 20-3. bulkfood_v4b.py (partial listing): when invoked through the managed class, /get/ returns a reference to the descriptor itself
+
+#+BEGIN_EXAMPLE
+    class Quantity:
+        __counter = 0
+
+        def __init__(self):
+            cls = self.__class__
+            prefix = cls.__name__
+            index = cls.__counter
+            self.storage_name = '_{}#{}'.format(prefix, index)
+            cls.__counter += 1
+
+        def __get__(self, instance, owner):
+            if instance is None:
+                return self   
+            else:
+                return getattr(instance, self.storage_name)   
+
+        def __set__(self, instance, value):
+            if value > 0:
+                setattr(instance, self.storage_name, value)
+            else:
+                raise ValueError('value must be > 0')
+#+END_EXAMPLE
+
+- [[#CO240-1][[[file:callouts/1.png]]]]  :: If the call was not through an instance, return the descriptor itself.
+
+- [[#CO240-2][[[file:callouts/2.png]]]]  :: Otherwise, return the managed attribute value, as usual.
+
+Trying out [[file:ch20.html#lineitem_class_v4b][Example 20-3]], this is what we see:
+
+#+BEGIN_EXAMPLE
+    >>> from bulkfood_v4b import LineItem
+    >>> LineItem.price
+    <bulkfood_v4b.Quantity object at 0x100721be0>
+    >>> br_nuts = LineItem('Brazil nuts', 10, 34.95)
+    >>> br_nuts.price
+    34.95
+#+END_EXAMPLE
+
+Looking at [[file:ch20.html#lineitem_class_v4][Example 20-2]], you may think that's a lot of code just for managing a couple of attributes, but it's important to realize that the descriptor logic is now abstracted into a separate code unit: the =Quantity= class. Usually we do not define a descriptor in the same module where it's used, but in a separate utility module designed to be used across the application---even in many applications, if you are developing a framework.
+
+With this in mind, [[file:ch20.html#lineitem_class_v4c][Example 20-4]] better represents the typical usage of a descriptor.
+
+
+
+Example 20-4. bulkfood_v4c.py: LineItem definition uncluttered; the Quantity descriptor class now resides in the imported model_v4c module
+
+#+BEGIN_EXAMPLE
+    import model_v4c as model   
+
+
+    class LineItem:
+        weight = model.Quantity()   
+        price = model.Quantity()
+
+        def __init__(self, description, weight, price):
+            self.description = description
+            self.weight = weight
+            self.price = price
+
+        def subtotal(self):
+            return self.weight * self.price
+#+END_EXAMPLE
+
+- [[#CO241-1][[[file:callouts/1.png]]]]  :: Import the =model_v4c= module, giving it a friendlier name.
+
+- [[#CO241-2][[[file:callouts/2.png]]]]  :: Put =model.Quantity= to use.
+
+Django users will notice that [[file:ch20.html#lineitem_class_v4c][Example 20-4]] looks a lot like a model definition. It's no coincidence: Django model fields are descriptors.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-1
+    :CLASS: title
+    :END:
+
+As implemented so far, the =Quantity= descriptor works pretty well. Its only real drawback is the use of generated storage names like =_Quantity#0=, making debugging hard for the users. But automatically assigning storage names that resemble the managed attribute names requires a class decorator or a metaclass, topics we'll defer to [[file:ch21.html][Chapter 21]].
+
+Because descriptors are defined in classes, we can leverage inheritance to reuse some of the code we have for new descriptors. That's what we'll do in the following section.
+
+
+
+Property Factory Versus Descriptor Class
+
+It's not hard to reimplement the enhanced descriptor class of [[file:ch20.html#lineitem_class_v4][Example 20-2]] by adding a few lines to the property factory shown in [[file:ch19.html#lineitem_class_v2prop][Example 19-24]]. The =__counter= variable presents a difficulty, but we can make it persist across invocations of the factory by defining it as an attribute of factory function object itself, as shown in [[file:ch20.html#lineitem_class_v4prop][Example 20-5]].
+
+
+
+Example 20-5. bulkfood_v4prop.py: same functionality as [[file:ch20.html#lineitem_class_v4][Example 20-2]] with a property factory instead of a descriptor class
+
+#+BEGIN_EXAMPLE
+    def quantity():   
+        try:
+            quantity.counter += 1   
+        except AttributeError:
+            quantity.counter = 0   
+
+        storage_name = '_{}:{}'.format('quantity', quantity.counter)   
+
+        def qty_getter(instance):   
+            return getattr(instance, storage_name)
+
+        def qty_setter(instance, value):
+            if value > 0:
+                setattr(instance, storage_name, value)
+            else:
+                raise ValueError('value must be > 0')
+
+        return property(qty_getter, qty_setter)
+#+END_EXAMPLE
+
+- [[#CO242-1][[[file:callouts/1.png]]]]  :: No =storage_name= argument.
+
+- [[#CO242-2][[[file:callouts/2.png]]]]  :: We can't rely on class attributes to share the =counter= across invocations, so we define it as an attribute of the =quantity= function itself.
+
+- [[#CO242-3][[[file:callouts/3.png]]]]  :: If =quantity.counter= is undefined, set it to =0=.
+
+- [[#CO242-4][[[file:callouts/4.png]]]]  :: We also don't have instance attributes, so we create =storage_name= as a local variable and rely on closures to keep them alive for later use by =qty_getter= and =qty_setter=.
+
+- [[#CO242-5][[[file:callouts/5.png]]]]  :: The remaining code is identical to [[file:ch19.html#lineitem_class_v2prop][Example 19-24]], except here we can use the =getattr= and =setattr= built-ins instead of fiddling with =instance.__dict__=.
+
+So, which do you prefer? [[file:ch20.html#lineitem_class_v4][Example 20-2]] or [[file:ch20.html#lineitem_class_v4prop][Example 20-5]]?
+
+I prefer the descriptor class approach mainly for two reasons:
+
+- A descriptor class can be extended by subclassing; reusing code from a factory function without copying and pasting is much harder.
+- It's more straightforward to hold state in class and instance attributes than in function attributes and closures as we had to do in [[file:ch20.html#lineitem_class_v4prop][Example 20-5]].
+
+On the other hand, when I explain [[file:ch20.html#lineitem_class_v4prop][Example 20-5]], I don't feel the urge to draw mills and gizmos. The property factory code does not depend on strange object relationships evidenced by descriptor methods having arguments named =self= and =instance=.
+
+To summarize, the property factory pattern is simpler in some regards, but the descriptor class approach is more extensible. It's also more widely used.
+
+*** LineItem Take #5: A New Descriptor Type
+    :PROPERTIES:
+    :CUSTOM_ID: new_descr_type_sec
+    :CLASS: title
+    :END:
+
+he imaginary organic food store hits a snag: somehow a line item instance was created with a blank description and the order could not be fulfilled. To prevent that, we'll create a new descriptor, =NonBlank=. As we design =NonBlank=, we realize it will be very much like the =Quantity= descriptor, except for the validation logic.
+
+Reflecting on the functionality of =Quantity=, we note it does two different things: it takes care of the storage attributes in the managed instances, and it validates the value used to set those attributes. This prompts a refactoring, producing two base classes:
+
+-  =AutoStorage=  :: Descriptor class that manages storage attributes automatically.
+-  =Validated=  :: =AutoStorage= abstract subclass that overrides the =__set__= method, calling a =validate= method that must be implemented by subclasses.
+
+We'll then rewrite =Quantity= and implement =NonBlank= by inheriting from =Validated= and just coding the =validate= methods. [[file:ch20.html#quantity_nonblank_uml][Figure 20-5]] depicts the setup.
+
+
+
+[[file:images/flup_2005.png]]
+
+Figure 20-5. A hierarchy of descriptor classes. The AutoStorage base class manages the automatic storage of the attribute, Validated handles validation by delegating to an abstract validate method, Quantity and NonBlank are concrete subclasses of Validated.
+
+The relationship between =Validated=, =Quantity=, and =NonBlank= is an application of the Template Method design pattern. In particular, the =Validated.__set__= is a clear example of what the Gang of Four describe as a template method:
+
+#+BEGIN_QUOTE
+  A template method defines an algorithm in terms of abstract operations that subclasses override to provide concrete behavior.^{[[[#ftn.id1039013][190]]]}
+#+END_QUOTE
+
+In this case, the abstract operation is validation. [[file:ch20.html#model_v5][Example 20-6]] lists the implementation of the classes in [[file:ch20.html#quantity_nonblank_uml][Figure 20-5]].
+
+
+
+Example 20-6. model_v5.py: the refactored descriptor classes
+
+#+BEGIN_EXAMPLE
+    import abc
+
+
+    class AutoStorage:   
+        __counter = 0
+
+        def __init__(self):
+            cls = self.__class__
+            prefix = cls.__name__
+            index = cls.__counter
+            self.storage_name = '_{}#{}'.format(prefix, index)
+            cls.__counter += 1
+
+        def __get__(self, instance, owner):
+            if instance is None:
+                return self
+            else:
+                return getattr(instance, self.storage_name)
+
+        def __set__(self, instance, value):
+            setattr(instance, self.storage_name, value)   
+
+
+    class Validated(abc.ABC, AutoStorage):   
+
+        def __set__(self, instance, value):
+            value = self.validate(instance, value)   
+            super().__set__(instance, value)   
+
+        @abc.abstractmethod
+        def validate(self, instance, value):   
+            """return validated value or raise ValueError"""
+
+
+    class Quantity(Validated):   
+        """a number greater than zero"""
+
+        def validate(self, instance, value):
+            if value <= 0:
+                raise ValueError('value must be > 0')
+            return value
+
+
+    class NonBlank(Validated):
+        """a string with at least one non-space character"""
+
+        def validate(self, instance, value):
+            value = value.strip()
+            if len(value) == 0:
+                raise ValueError('value cannot be empty or blank')
+            return value   
+#+END_EXAMPLE
+
+- [[#CO243-1][[[file:callouts/1.png]]]]  :: =AutoStorage= provides most of the functionality of the former =Quantity= descriptor...
+
+- [[#CO243-2][[[file:callouts/2.png]]]]  :: ...except validation.
+
+- [[#CO243-3][[[file:callouts/3.png]]]]  :: =Validated= is abstract but also inherits from =AutoStorage=.
+
+- [[#CO243-4][[[file:callouts/4.png]]]]  :: =__set__= delegates validation to a =validate= method...
+
+- [[#CO243-5][[[file:callouts/5.png]]]]  :: ...then uses the returned =value= to invoke =__set__= on a superclass, which performs the actual storage.
+
+- [[#CO243-6][[[file:callouts/6.png]]]]  :: In this class, =validate= is an abstract method.
+
+- [[#CO243-7][[[file:callouts/7.png]]]]  :: =Quantity= and =NonBlank= inherit from =Validated=.
+
+- [[#CO243-8][[[file:callouts/8.png]]]]  :: Requiring the concrete =validate= methods to return the validated =value= gives them an opportunity to clean up, convert, or normalize the data received. In this case, the =value= is returned stripped of leading and trailing blanks.
+
+Users of /model_v5.py/ don't need to know all these details. What matters is that they get to use =Quantity= and =NonBlank= to automate the validation of instance attributes. See the latest =LineItem= class in [[file:ch20.html#lineitem_class_v5][Example 20-7]].
+
+
+
+Example 20-7. bulkfood_v5.py: LineItem using Quantity and NonBlank descriptors
+
+#+BEGIN_EXAMPLE
+    import model_v5 as model   
+
+
+    class LineItem:
+        description = model.NonBlank()   
+        weight = model.Quantity()
+        price = model.Quantity()
+
+        def __init__(self, description, weight, price):
+            self.description = description
+            self.weight = weight
+            self.price = price
+
+        def subtotal(self):
+            return self.weight * self.price
+#+END_EXAMPLE
+
+- [[#CO244-1][[[file:callouts/1.png]]]]  :: Import the =model_v5= module, giving it a friendlier name.
+
+- [[#CO244-2][[[file:callouts/2.png]]]]  :: Put =model.NonBlank= to use. The rest of the code is unchanged.
+
+The =LineItem= examples we've seen in this chapter demonstrate a typical use of descriptors to manage data attributes. Such a descriptor is also called an overriding descriptor because its =__set__= method overrides (i.e., interrupts and overrules) the setting of an attribute by the same name in the managed instance. However, there are also non-overriding descriptors. We'll explore this distinction in detail in the next section.
+
+** Overriding Versus Nonoverriding Descriptors
+
+
+Recall that there is an important asymmetry in the way Python handles attributes. Reading an attribute through an instance normally returns the attribute defined in the instance, but if there is no such attribute in the instance, a class attribute will be retrieved. On the other hand, assigning to an attribute in an instance normally creates the attribute in the instance, without affecting the class at all.
+
+This asymmetry also affects descriptors, in effect creating two broad categories of descriptors depending on whether the =__set__= method is defined. Observing the different behaviors requires a few classes, so we are going to use the code in [[file:ch20.html#descriptorkinds_ex][Example 20-8]] as our testbed for the following sections.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-2
+    :CLASS: title
+    :END:
+
+Every =__get__= and =__set__= method in [[file:ch20.html#descriptorkinds_ex][Example 20-8]] calls =print_args= so their invocations are displayed in a readable way. Understanding =print_args= and the auxiliary functions =cls_name= and =display= is not important, so don't get distracted by them.
+
+
+
+Example 20-8. descriptorkinds.py: simple classes for studying descriptor overriding behaviors
+
+#+BEGIN_EXAMPLE
+    ### auxiliary functions for display only ###
+
+    def cls_name(obj_or_cls):
+        cls = type(obj_or_cls)
+        if cls is type:
+            cls = obj_or_cls
+        return cls.__name__.split('.')[-1]
+
+    def display(obj):
+        cls = type(obj)
+        if cls is type:
+            return '<class {}>'.format(obj.__name__)
+        elif cls in [type(None), int]:
+            return repr(obj)
+        else:
+            return '<{} object>'.format(cls_name(obj))
+
+    def print_args(name, *args):
+        pseudo_args = ', '.join(display(x) for x in args)
+        print('-> {}.__{}__({})'.format(cls_name(args[0]), name, pseudo_args))
+
+
+    ### essential classes for this example ###
+
+    class Overriding:   
+        """a.k.a. data descriptor or enforced descriptor"""
+
+        def __get__(self, instance, owner):
+            print_args('get', self, instance, owner)   
+
+        def __set__(self, instance, value):
+            print_args('set', self, instance, value)
+
+
+    class OverridingNoGet:   
+        """an overriding descriptor without ``__get__``"""
+
+        def __set__(self, instance, value):
+            print_args('set', self, instance, value)
+
+
+    class NonOverriding:   
+        """a.k.a. non-data or shadowable descriptor"""
+
+        def __get__(self, instance, owner):
+            print_args('get', self, instance, owner)
+
+
+    class Managed:   
+        over = Overriding()
+        over_no_get = OverridingNoGet()
+        non_over = NonOverriding()
+
+        def spam(self):   
+            print('-> Managed.spam({})'.format(display(self)))
+#+END_EXAMPLE
+
+- [[#CO245-1][[[file:callouts/1.png]]]]  :: A typical overriding descriptor class with =__get__= and =__set__=.
+
+- [[#CO245-2][[[file:callouts/2.png]]]]  :: The =print_args= function is called by every descriptor method in this example.
+
+- [[#CO245-3][[[file:callouts/3.png]]]]  :: An overriding descriptor without a =__get__= method.
+
+- [[#CO245-4][[[file:callouts/4.png]]]]  :: No =__set__= method here, so this is a nonoverriding descriptor.
+
+- [[#CO245-5][[[file:callouts/5.png]]]]  :: The managed class, using one instance of each of the descriptor classes.
+
+- [[#CO245-6][[[file:callouts/6.png]]]]  :: The =spam= method is here for comparison, because methods are also descriptors.
+
+In the following sections, we will examine the behavior of attribute reads and writes on the =Managed= class and one instance of it, going through each of the different descriptors defined.
+
+*** Overriding Descriptor
+    :PROPERTIES:
+    :CUSTOM_ID: _overriding_descriptor
+    :CLASS: title
+    :END:
+
+A descriptor that implements the =__set__= method is called an /overriding descriptor/, because although it is a class attribute, a descriptor implementing =__set__= will override attempts to assign to instance attributes. This is how [[file:ch20.html#lineitem_class_v4][Example 20-2]] was implemented. Properties are also overriding descriptors: if you don't provide a setter function, the default =__set__= from the =property= class will raise =AttributeError= to signal that the attribute is read-only. Given the code in [[file:ch20.html#descriptorkinds_ex][Example 20-8]], experiments with an overriding descriptor can be seen in [[file:ch20.html#descriptorkinds_demo1][Example 20-9]].
+
+
+
+Example 20-9. Behavior of an overriding descriptor: obj.over is an instance of Overriding ([[file:ch20.html#descriptorkinds_ex][Example 20-8]])
+
+#+BEGIN_EXAMPLE
+        >>> obj = Managed()   
+        >>> obj.over   
+        -> Overriding.__get__(<Overriding object>, <Managed object>,
+            <class Managed>)
+        >>> Managed.over   
+        -> Overriding.__get__(<Overriding object>, None, <class Managed>)
+        >>> obj.over = 7   
+        -> Overriding.__set__(<Overriding object>, <Managed object>, 7)
+        >>> obj.over   
+        -> Overriding.__get__(<Overriding object>, <Managed object>,
+            <class Managed>)
+        >>> obj.__dict__['over'] = 8   
+        >>> vars(obj)   
+        {'over': 8}
+        >>> obj.over   
+        -> Overriding.__get__(<Overriding object>, <Managed object>,
+            <class Managed>)
+#+END_EXAMPLE
+
+- [[#CO246-1][[[file:callouts/1.png]]]]  :: Create =Managed= object for testing.
+
+- [[#CO246-2][[[file:callouts/2.png]]]]  :: =obj.over= triggers the descriptor =__get__= method, passing the managed instance =obj= as the second argument.
+
+- [[#CO246-3][[[file:callouts/3.png]]]]  :: =Managed.over= triggers the descriptor =__get__= method, passing =None= as the second argument (=instance=).
+
+- [[#CO246-4][[[file:callouts/4.png]]]]  :: Assigning to =obj.over= triggers the descriptor =__set__= method, passing the value =7= as the last argument.
+
+- [[#CO246-5][[[file:callouts/5.png]]]]  :: Reading =obj.over= still invokes the descriptor =__get__= method.
+
+- [[#CO246-6][[[file:callouts/6.png]]]]  :: Bypassing the descriptor, setting a value directly to the =obj.__dict__=.
+
+- [[#CO246-7][[[file:callouts/7.png]]]]  :: Verify that the value is in the =obj.__dict__=, under the =over= key.
+
+- [[#CO246-8][[[file:callouts/8.png]]]]  :: However, even with an instance attribute named =over=, the =Managed.over= descriptor still overrides attempts to read =obj.over=.
+
+*** Overriding Descriptor Without __get__
+    :PROPERTIES:
+    :CUSTOM_ID: _overriding_descriptor_without_x5f_x5f_get_x5f_x5f
+    :CLASS: title
+    :END:
+
+Usually, overriding descriptors implement both =__set__= and =__get__=, but it's also possible to implement only =__set__=, as we saw in [[file:ch20.html#lineitem_class_v3][Example 20-1]]. In this case, only writing is handled by the descriptor. Reading the descriptor through an instance will return the descriptor object itself because there is no =__get__= to handle that access. If a namesake instance attribute is created with a new value via direct access to the instance =__dict__=, the =__set__= method will still override further attempts to set that attribute, but reading that attribute will simply return the new value from the instance, instead of returning the descriptor object. In other words, the instance attribute will shadow the descriptor, but only when reading. See [[file:ch20.html#descriptorkinds_demo2][Example 20-10]].
+
+
+
+Example 20-10. Overriding descriptor without /get/: obj.over_no_get is an instance of OverridingNoGet ([[file:ch20.html#descriptorkinds_ex][Example 20-8]])
+
+#+BEGIN_EXAMPLE
+        >>> obj.over_no_get   
+        <__main__.OverridingNoGet object at 0x665bcc>
+        >>> Managed.over_no_get   
+        <__main__.OverridingNoGet object at 0x665bcc>
+        >>> obj.over_no_get = 7   
+        -> OverridingNoGet.__set__(<OverridingNoGet object>, <Managed object>, 7)
+        >>> obj.over_no_get   
+        <__main__.OverridingNoGet object at 0x665bcc>
+        >>> obj.__dict__['over_no_get'] = 9   
+        >>> obj.over_no_get   
+        9
+        >>> obj.over_no_get = 7   
+        -> OverridingNoGet.__set__(<OverridingNoGet object>, <Managed object>, 7)
+        >>> obj.over_no_get   
+        9
+#+END_EXAMPLE
+
+- [[#CO247-1][[[file:callouts/1.png]]]]  :: This overriding descriptor doesn't have a =__get__= method, so reading =obj.over_no_get= retrieves the descriptor instance from the class.
+
+- [[#CO247-2][[[file:callouts/2.png]]]]  :: The same thing happens if we retrieve the descriptor instance directly from the managed class.
+
+- [[#CO247-3][[[file:callouts/3.png]]]]  :: Trying to set a value to =obj.over_no_get= invokes the =__set__= descriptor method.
+
+- [[#CO247-4][[[file:callouts/4.png]]]]  :: Because our =__set__= doesn't make changes, reading =obj.over_no_get= again retrieves the descriptor instance from the managed class.
+
+- [[#CO247-5][[[file:callouts/5.png]]]]  :: Going through the instance =__dict__= to set an instance attribute named =over_no_get=.
+
+- [[#CO247-6][[[file:callouts/6.png]]]]  :: Now that =over_no_get= instance attribute shadows the descriptor, but only for reading.
+
+- [[#CO247-7][[[file:callouts/7.png]]]]  :: Trying to assign a value to =obj.over_no_get= still goes through the descriptor set.
+
+- [[#CO247-8][[[file:callouts/8.png]]]]  :: But for reading, that descriptor is shadowed as long as there is a namesake instance attribute.
+
+*** Nonoverriding Descriptor
+    :PROPERTIES:
+    :CUSTOM_ID: _nonoverriding_descriptor
+    :CLASS: title
+    :END:
+
+If a descriptor does not implement =__set__=, then it's a nonoverriding descriptor. Setting an instance attribute with the same name will shadow the descriptor, rendering it ineffective for handling that attribute in that specific instance. Methods are implemented as nonoverriding descriptors. [[file:ch20.html#descriptorkinds_demo3][Example 20-11]] shows the operation of a nonoverriding descriptor.
+
+
+
+Example 20-11. Behavior of a nonoverriding descriptor: obj.non_over is an instance of NonOverriding ([[file:ch20.html#descriptorkinds_ex][Example 20-8]])
+
+#+BEGIN_EXAMPLE
+        >>> obj = Managed()
+        >>> obj.non_over   
+        -> NonOverriding.__get__(<NonOverriding object>, <Managed object>,
+            <class Managed>)
+        >>> obj.non_over = 7   
+        >>> obj.non_over   
+        7
+        >>> Managed.non_over   
+        -> NonOverriding.__get__(<NonOverriding object>, None, <class Managed>)
+        >>> del obj.non_over   
+        >>> obj.non_over   
+        -> NonOverriding.__get__(<NonOverriding object>, <Managed object>,
+            <class Managed>)
+#+END_EXAMPLE
+
+- [[#CO248-1][[[file:callouts/1.png]]]]  :: =obj.non_over= triggers the descriptor =__get__= method, passing =obj= as the second argument.
+
+- [[#CO248-2][[[file:callouts/2.png]]]]  :: =Managed.non_over= is a nonoverriding descriptor, so there is no =__set__= to interfere with this assignment.
+
+- [[#CO248-3][[[file:callouts/3.png]]]]  :: The =obj= now has an instance attribute named =non_over=, which shadows the namesake descriptor attribute in the =Managed= class.
+
+- [[#CO248-4][[[file:callouts/4.png]]]]  :: The =Managed.non_over= descriptor is still there, and catches this access via the class.
+
+- [[#CO248-5][[[file:callouts/5.png]]]]  :: If the =non_over= instance attribute is deleted...
+
+- [[#CO248-6][[[file:callouts/6.png]]]]  :: Then reading =obj.non_over= hits the =__get__= method of the descriptor in the class, but note that the second argument is the managed instance.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-1
+    :CLASS: title
+    :END:
+
+Python contributors and authors use different terms when discussing these concepts. Overriding descriptors are also called data descriptors or enforced descriptors. Nonoverriding descriptors are also known as nondata descriptors or shadowable descriptors.
+
+In the previous examples, we saw several assignments to an instance attribute with the same name as a descriptor, and different results according to the presence of a =__set__= method in the descriptor.
+
+The setting of attributes in the class cannot be controlled by descriptors attached to the same class. In particular, this means that the descriptor attributes themselves can be clobbered by assigning to the class, as the next section explains.
+
+*** Overwriting a Descriptor in the Class
+    :PROPERTIES:
+    :CUSTOM_ID: _overwriting_a_descriptor_in_the_class
+    :CLASS: title
+    :END:
+
+Regardless of whether a descriptor is overriding or not, it can be overwritten by assignment to the class. This is a monkey-patching technique, but in [[file:ch20.html#descriptorkinds_demo4][Example 20-12]] the descriptors are replaced by integers, which would effectively break any class that depended on the descriptors for proper operation.
+
+
+
+Example 20-12. Any descriptor can be overwritten on the class itself
+
+#+BEGIN_EXAMPLE
+        >>> obj = Managed()   
+        >>> Managed.over = 1   
+        >>> Managed.over_no_get = 2
+        >>> Managed.non_over = 3
+        >>> obj.over, obj.over_no_get, obj.non_over   
+        (1, 2, 3)
+#+END_EXAMPLE
+
+- [[#CO249-1][[[file:callouts/1.png]]]]  :: Create a new instance for later testing.
+
+- [[#CO249-2][[[file:callouts/2.png]]]]  :: Overwrite the descriptor attributes in the class.
+
+- [[#CO249-3][[[file:callouts/3.png]]]]  :: The descriptors are really gone.
+
+[[file:ch20.html#descriptorkinds_demo4][Example 20-12]] reveals another asymmetry regarding reading and writing attributes: although the reading of a class attribute can be controlled by a descriptor with =__get__= attached to the managed class, the writing of a class attribute cannot be handled by a descriptor with =__set__= attached to the same class.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip
+    :CLASS: title
+    :END:
+
+In order to control the setting of attributes in a class, you have to attach descriptors to the class of the class---in other words, the metaclass. By default, the metaclass of user-defined classes is =type=, and you cannot add attributes to =type=. But in [[file:ch21.html][Chapter 21]], we'll create our own metaclasses.
+
+Let's now focus on how descriptors are used to implement methods in Python.
+
+** Methods Are Descriptors
+
+
+A function within a class becomes a bound method because all user-defined functions have a =__get__= method, therefore they operate as descriptors when attached to a class. [[file:ch20.html#descriptorkinds_demo5][Example 20-13]] demonstrates reading the =spam= method from the =Managed= class introduced in [[file:ch20.html#descriptorkinds_ex][Example 20-8]].
+
+
+
+Example 20-13. A method is a nonoverriding descriptor
+
+#+BEGIN_EXAMPLE
+        >>> obj = Managed()
+        >>> obj.spam   
+        <bound method Managed.spam of <descriptorkinds.Managed object at 0x74c80c>>
+        >>> Managed.spam   
+        <function Managed.spam at 0x734734>
+        >>> obj.spam = 7   
+        >>> obj.spam
+        7
+#+END_EXAMPLE
+
+- [[#CO250-1][[[file:callouts/1.png]]]]  :: Reading from =obj.spam= retrieves a bound method object.
+
+- [[#CO250-2][[[file:callouts/2.png]]]]  :: But reading from =Managed.spam= retrieves a function.
+
+- [[#CO250-3][[[file:callouts/3.png]]]]  :: Assigning a value to =obj.spam= shadows the class attribute, rendering the =spam= method inaccessible from the =obj= instance.
+
+Because functions do not implement =__set__=, they are nonoverriding descriptors, as the last line of [[file:ch20.html#descriptorkinds_demo5][Example 20-13]] shows.
+
+The other key takeaway from [[file:ch20.html#descriptorkinds_demo5][Example 20-13]] is that =obj.spam= and =Managed.spam= retrieve different objects. As usual with descriptors, the =__get__= of a function returns a reference to itself when the access happens through the managed class. But when the access goes through an instance, the =__get__= of the function returns a bound method object: a callable that wraps the function and binds the managed instance (e.g., =obj=) to the first argument of the function (i.e., =self=), like the =functools.partial= function does (as seen in [[file:ch05.html#functools_partial_sec][Freezing Arguments with functools.partial]]).
+
+For a deeper understanding of this mechanism, take a look at [[file:ch20.html#func_descriptor_ex][Example 20-14]].
+
+
+
+Example 20-14. method_is_descriptor.py: a Text class, derived from UserString
+
+#+BEGIN_EXAMPLE
+    import collections
+
+
+    class Text(collections.UserString):
+
+        def __repr__(self):
+            return 'Text({!r})'.format(self.data)
+
+        def reverse(self):
+            return self[::-1]
+#+END_EXAMPLE
+
+Now let's investigate the =Text.reverse= method. See [[file:ch20.html#func_descriptor_demo][Example 20-15]].
+
+
+
+Example 20-15. Experiments with a method
+
+#+BEGIN_EXAMPLE
+        >>> word = Text('forward')
+        >>> word   
+        Text('forward')
+        >>> word.reverse()   
+        Text('drawrof')
+        >>> Text.reverse(Text('backward'))   
+        Text('drawkcab')
+        >>> type(Text.reverse), type(word.reverse)   
+        (<class 'function'>, <class 'method'>)
+        >>> list(map(Text.reverse, ['repaid', (10, 20, 30), Text('stressed')]))   
+        ['diaper', (30, 20, 10), Text('desserts')]
+        >>> Text.reverse.__get__(word)   
+        <bound method Text.reverse of Text('forward')>
+        >>> Text.reverse.__get__(None, Text)   
+        <function Text.reverse at 0x101244e18>
+        >>> word.reverse   
+        <bound method Text.reverse of Text('forward')>
+        >>> word.reverse.__self__   
+        Text('forward')
+        >>> word.reverse.__func__ is Text.reverse   
+        True
+#+END_EXAMPLE
+
+- [[#CO251-1][[[file:callouts/1.png]]]]  :: The =repr= of a =Text= instance looks like a =Text= constructor call that would make an equal instance.
+
+- [[#CO251-2][[[file:callouts/2.png]]]]  :: The =reverse= method returns the text spelled backward.
+
+- [[#CO251-3][[[file:callouts/3.png]]]]  :: A method called on the class works as a function.
+
+- [[#CO251-4][[[file:callouts/4.png]]]]  :: Note the different types: a =function= and a =method=.
+
+- [[#CO251-5][[[file:callouts/5.png]]]]  :: =Text.reverse= operates as a function, even working with objects that are not instances of =Text=.
+
+- [[#CO251-6][[[file:callouts/6.png]]]]  :: Any function is a nonoverriding descriptor. Calling its =__get__= with an instance retrieves a method bound to that instance.
+
+- [[#CO251-7][[[file:callouts/7.png]]]]  :: Calling the function's =__get__= with =None= as the =instance= argument retrieves the function itself.
+
+- [[#CO251-8][[[file:callouts/8.png]]]]  :: The expression =word.reverse= actually invokes =Text.reverse.__get__(word)=, returning the bound method.
+
+- [[#CO251-9][[[file:callouts/9.png]]]]  :: The bound method object has a =__self__= attribute holding a reference to the instance on which the method was called.
+
+- [[#CO251-10][[[file:callouts/10.png]]]]  :: The =__func__= attribute of the bound method is a reference to the original function attached to the managed class.
+
+The bound method object also has a =__call__= method, which handles the actual invocation. This method calls the original function referenced in =__func__=, passing the =__self__= attribute of the method as the first argument. That's how the implicit binding of the conventional =self= argument works.
+
+The way functions are turned into bound methods is a prime example of how descriptors are used as infrastructure in the language.
+
+After this deep dive into how descriptors and methods work, let's go through some practical advice about their use.
+
+** Descriptor Usage Tips
+
+
+The following list addresses some practical consequences of the descriptor characteristics just described:
+
+-  Use property to Keep It Simple  :: The =property= built-in actually creates overriding descriptors implementing both =__set__= and =__get__=, even if you do not define a setter method. The default =__set__= of a property raises =AttributeError: can't set attribute=, so a property is the easiest way to create a read-only attribute, avoiding the issue described next.
+-  Read-only descriptors require __set__  :: If you use a descriptor class to implement a read-only attribute, you must remember to code both =__get__= and =__set__=, otherwise setting a namesake attribute on an instance will shadow the descriptor. The =__set__= method of a read-only attribute should just raise =AttributeError= with a suitable message.^{[[[#ftn.id1094347][191]]]}
+-  Validation descriptors can work with __set__ only  :: In a descriptor designed only for validation, the =__set__= method should check the =value= argument it gets, and if valid, set it directly in the instance =__dict__= using the descriptor instance name as key. That way, reading the attribute with the same name from the instance will be as fast as possible, because it will not require a =__get__=. See the code for [[file:ch20.html#lineitem_class_v3][Example 20-1]].
+-  Caching can be done efficiently with __get__ only  :: If you code just the =__get__= method, you have a nonoverriding descriptor. These are useful to make some expensive computation and then cache the result by setting an attribute by the same name on the instance. The namesake instance attribute will shadow the descriptor, so subsequent access to that attribute will fetch it directly from the instance =__dict__= and not trigger the descriptor =__get__= anymore.
+-  Nonspecial methods can be shadowed by instance attributes  :: Because functions and methods only implement =__get__=, they do not handle attempts at setting instance attributes with the same name, so a simple assignment like =my_obj.the_method = 7= means that further access to =the_method= through that instance will retrieve the number =7=---without affecting the class or other instances. However, this issue does not interfere with special methods. The interpreter only looks for special methods in the class itself, in other words, =repr(x)= is executed as =x.__class__.__repr__(x)=, so a =__repr__= attribute defined in =x= has no effect on =repr(x)=. For the same reason, the existence of an attribute named =__getattr__= in an instance will not subvert the usual attribute access algorithm.
+
+The fact that nonspecial methods can be overridden so easily in instances may sound fragile and error-prone, but I personally have never been bitten by this in more than 15 years of Python coding. On the other hand, if you are doing a lot of dynamic attribute creation, where the attribute names come from data you don't control (as we did in the earlier parts of this chapter), then you should be aware of this and perhaps implement some filtering or escaping of the dynamic attribute names to preserve your sanity.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-3
+    :CLASS: title
+    :END:
+
+The =FrozenJSON= class in [[file:ch19.html#ex_explore1][Example 19-6]] is safe from instance attribute shadowing methods because its only methods are special methods and the =build= class method. Class methods are safe as long as they are always accessed through the class, as I did with =FrozenJSON.build= in [[file:ch19.html#ex_explore1][Example 19-6]]---later replaced by =__new__= in [[file:ch19.html#ex_explore2][Example 19-7]]. The =Record= class (Examples [[file:ch19.html#ex_schedule1][19-9]] and [[file:ch19.html#ex_schedule2_record][19-11]]) and subclasses are also safe: they use only special methods, class methods, static methods, and properties. Properties are data descriptors, so cannot be overridden by instance attributes.
+
+To close this chapter, we'll cover two features we saw with properties that we have not addressed in the context of descriptors: documentation and handling attempts to delete a managed attribute.
+
+** Descriptor docstring and Overriding Deletion
+
+
+The docstring of a descriptor class is used to document every instance of the descriptor in the managed class. See [[file:ch20.html#descriptor_help_screens][Figure 20-6]] for the help displays for the =LineItem= class with the =Quantity= and =NonBlank= descriptors from Examples [[file:ch20.html#model_v5][20-6]] and [[file:ch20.html#lineitem_class_v5][20-7]].
+
+
+
+[[file:images/flup_2006.png.jpg]]
+
+Figure 20-6. Screenshots of the Python console when issuing the commands help(LineItem.weight) and help(LineItem)
+
+That is somewhat unsatisfactory. In the case of =LineItem=, it would be good to add, for example, the information that =weight= must be in kilograms. That would be trivial with properties, because each property handles a specific managed attribute. But with descriptors, the same =Quantity= descriptor class is used for =weight= and =price=.^{[[[#ftn.id1094714][192]]]}
+
+The second detail we discussed with properties but have not addressed with descriptors is handling attempts to delete a managed attribute. That can be done by implementing a =__delete__= method alongside or instead of the usual =__get__= and/or =__set__= in the descriptor class. Coding a silly descriptor class with =__delete__= is left as an exercise to the leisurely reader.
+
+** Chapter Summary
+
+
+The first example of this chapter was a continuation of the =LineItem= examples from [[file:ch19.html][Chapter 19]]. In [[file:ch20.html#lineitem_class_v3][Example 20-1]], we replaced properties with descriptors. We saw that a descriptor is a class that provides instances that are deployed as attributes in the managed class. Discussing this mechanism required special terminology, introducing terms such as managed instance and storage attribute.
+
+In [[file:ch20.html#auto_storage_sec][LineItem Take #4: Automatic Storage Attribute Names]], we removed the requirement that =Quantity= descriptors were declared with an explicit =storage_name=, which was redundant and error-prone, because that name should always match the attribute name on the left of the assignment in the descriptor instantiation. The solution was to generate unique =storage_names= by combining the descriptor class name with a counter at the class level (e.g., ='_Quantity#1'=).
+
+Next, we compared the code size, strengths, and weaknesses of a descriptor class with a property factory built on functional programming idioms. The latter works perfectly well and is simpler in some ways, but the former is more flexible and is the standard solution. A key advantage of the descriptor class was exploited in [[file:ch20.html#new_descr_type_sec][LineItem Take #5: A New Descriptor Type]]: subclassing to share code while building specialized descriptors with some common functionality.
+
+We then looked at the different behavior of descriptors providing or omitting the =__set__= method, making the crucial distinction between overriding and non-overriding descriptors. Through detailed testing we uncovered when descriptors are in control and when they are shadowed, bypassed, or overwritten.
+
+Following that, we studied a particular category of nonoverriding descriptors: methods. Console testing revealed how a function attached to a class becomes a method when accessed through an instance, by leveraging the descriptor protocol.
+
+To conclude the chapter, [[file:ch20.html#descriptor_usage_sec][Descriptor Usage Tips]] provided a brief look at how descriptor deletion and documentation work.
+
+Throughout this chapter, we faced a few issues that only class metaprogramming can solve, and we deferred those to [[file:ch21.html][Chapter 21]].
+
+** Further Reading
+
+
+Besides the obligatory reference to the [[http://bit.ly/1GsZwss][“Data Model” chapter]], Raymond Hettinger's [[http://bit.ly/1HGwlS3][Descriptor HowTo Guide]] is a valuable resource---part of the [[http://bit.ly/1HGwnsV][HowTo collection]] in the official Python documentation.
+
+As usual with Python object model subjects, Alex Martelli's /Python in a Nutshell/, 2E (O'Reilly) is authoritative and objective, even if somewhat dated: the key mechanisms discussed in this chapter were introduced in Python 2.2, long before the 2.5 version covered by that book. Martelli also has a presentation titled /Python's Object Model/, which covers properties and descriptors in depth ([[http://bit.ly/1HGwoxa][slides]], [[http://bit.ly/1HGwp46][video]]). Highly recommended.
+
+For Python 3 coverage with practical examples, /Python Cookbook, 3E/ by David Beazley and Brian K. Jones (O'Reilly), has many recipes illustrating descriptors, of which I want to highlight “6.12. Reading Nested and Variable-Sized Binary Structures,” “8.10. Using Lazily Computed Properties,” “8.13. Implementing a Data Model or Type System,” and “9.9. Defining Decorators As Classes”---the latter of which addresses deep issues with the interaction of function decorators, descriptors, and methods, explaining how a function decorator implemented as a class with =__call__= also needs to implement =__get__= if it wants to work with decorating methods as well as functions.
+
+Soapbox
+
+*The Problem with self*
+
+“Worse is Better” is a design philosophy described by Richard P. Gabriel in [[http://bit.ly/1HGwvIZ][“The Rise of Worse is Better”]]. The first priority of this philosophy is “Simplicity,” which Gabriel states as:
+
+#+BEGIN_QUOTE
+  The design must be simple, both in implementation and interface. It is more important for the implementation to be simple than the interface. Simplicity is the most important consideration in a design.
+#+END_QUOTE
+
+I believe the requirement to explicitly declare =self= as a first argument in methods is an application of “Worse is Better” in Python. The implementation is simple---elegant even---at the expense of the user interface: a method signature like =def zfill(self, width):= doesn't visually match the invocation =pobox.zfill(8)=.
+
+Modula-3 introduced that convention---and the use of the =self= identifier---but there is a difference: in Modula-3, interfaces are declared separately from their implementation, and in the interface declaration the =self= argument is omitted, so from the user's perspective, a method appears in an interface declaration exactly with the same number of explicit arguments it takes.
+
+One improvement in this regard has been the error messages: for a user-defined method with one argument besides =self=, if the user invokes =obj.meth()=, Python 2.7 raises =TypeError: meth() takes exactly 2 arguments (1 given)=, but in Python 3.4 the message is less confusing, sidestepping the issue of the argument count and naming the missing argument: =meth() missing 1 required positional argument: 'x'=.
+
+Besides the use of =self= as an explicit argument, the requirement to qualify all access to instance attributes with =self= is also criticized.^{[[[#ftn.id1095053][193]]]} I personally don't mind typing the =self= qualifier: it's good to distinguish local variables from attributes. My issue is with the use of self in the =def= statement. But I got used to it.
+
+Anyone who is unhappy about the explicit =self= in Python can feel a lot better by considering the baffling semantics of the implicit =this= in JavaScript. Guido had some good reasons to make =self= work as it does, and he wrote about them in [[http://bit.ly/1CAyiQY][“Adding Support for User-Defined Classes”]], a post on his blog, The History of Python.
+
+
+
+--------------
+
+
+^{[[[#id1032822][187]]]} Raymond Hettinger, [[https://docs.python.org/3/howto/descriptor.html][Descriptor HowTo Guide]].
+
+
+^{[[[#id1033410][188]]]} Classes and instances are drawn as rectangles in UML class diagrams. There are visual differences, but instances are rarely shown in class diagrams, so developers may not recognize them as such.
+
+
+^{[[[#id1034415][189]]]} White truffles cost thousands of dollars per pound. Disallowing the sale of truffles for $0.01 is left as an exercise for the enterprising reader. I know a person who actually bought an $1,800 encyclopedia of statistics for $18 because of an error in an online store (not Amazon.com).
+
+
+^{[[[#id1039013][190]]]} Gamma et al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 326.
+
+
+^{[[[#id1094347][191]]]} Python is not consistent in such messages. Trying to change the =c.real= attribute of a =complex= number gets =AttributeError: read-only attribute=, but an attempt to change =c.conjugate= (a method of =complex=), results in =AttributeError: 'complex' object attribute 'conjugate' is read-only=.
+
+
+^{[[[#id1094714][192]]]} Customizing the help text for each descriptor instance is surprisingly hard. One solution requires dynamically building a wrapper class for each descriptor instance.
+
+
+^{[[[#id1095053][193]]]} See, for example, A. M. Kuchling's famous /Python Warts/ post [[http://bit.ly/1cPSaDh][(archived)]]; Kuchling himself is not so bothered by the =self= qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+
+here are visual differences, but instances are rarely shown in class diagrams, so developers may not recognize them as such.
+
+
+^{[[[#id1034415][189]]]} White truffles cost thousands of dollars per pound. Disallowing the sale of truffles for $0.01 is left as an exercise for the enterprising reader. I know a person who actually bought an $1,800 encyclopedia of statistics for $18 because of an error in an online store (not Amazon.com).
+
+
+^{[[[#id1039013][190]]]} Gamma et al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 326.
+
+
+^{[[[#id1094347][191]]]} Python is not consistent in such messages. Trying to change the =c.real= attribute of a =complex= number gets =AttributeError: read-only attribute=, but an attempt to change =c.conjugate= (a method of =complex=), results in =AttributeError: 'complex' object attribute 'conjugate' is read-only=.
+
+
+^{[[[#id1094714][192]]]} Customizing the help text for each descriptor instance is surprisingly hard. One solution requires dynamically building a wrapper class for each descriptor instance.
+
+
+^{[[[#id1095053][193]]]} See, for example, A. M. Kuchling's famous /Python Warts/ post [[http://bit.ly/1cPSaDh][(archived)]]; Kuchling himself is not so bothered by the =self= qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+
+qualifier, but he mentions it---probably echoing opinions from =comp.lang.python=.
+
+

@@ -1,0 +1,478 @@
+* Chapter 12. Inheritance: For Good or For Worse
+
+
+A great resource to study these classes is the [[http://ccbv.co.uk/][Classy Class-Based Views]] website, where you can easily navigate through them, see all methods in each class (inherited, overridden, and added methods), view diagrams, browse their documentation, and jump to their [[http://bit.ly/1JHSoe8][source code on GitHub]].
+
+=View= is the base class of all views (it could be an ABC), and it provides core functionality like the =dispatch= method, which delegates to “handler” methods like =get=, =head=, =post=, etc., implemented by concrete subclasses to handle the different HTTP verbs.^{[[[#ftn.id654887][96]]]} The =RedirectView= class inherits only from =View=, and you can see that it implements =get=, =head=, =post=, etc.
+
+Concrete subclasses of =View= are supposed to implement the handler methods, so why aren't they part of the =View= interface? The reason: subclasses are free to implement just the handlers they want to support. A =TemplateView= is used only to display content, so it only implements =get=. If an HTTP =POST= request is sent to a =TemplateView=, the inherited =View.dispatch= method checks that there is no =post= handler, and produces an HTTP =405 Method Not Allowed= response.^{[[[#ftn.id660373][97]]]}
+
+
+
+[[file:images/flup_1204.png]]
+
+Figure 12-4. UML class diagram for the django.views.generic.base module
+
+The =TemplateResponseMixin= provides functionality that is of interest only to views that need to use a template. A =RedirectView=, for example, has no content body, so it has no need of a template and it does not inherit from this mixin. =TemplateResponseMixin= provides behaviors to =TemplateView= and other template-rendering views, such as =ListView=, =DetailView=, etc., defined in other modules of the =django.views.generic= package. [[file:ch12.html#django_view_list_uml][Figure 12-5]] depicts the =django.views.generic.list= module and part of the =base= module.
+
+
+
+[[file:images/flup_1205.png]]
+
+Figure 12-5. UML class diagram for the django.views.generic.list module. Here the three classes of the base module are collapsed (see [[file:ch12.html#django_view_base_uml][Figure 12-4]]). The ListView class has no methods or attributes: it's an aggregate class.
+
+For Django users, the most important class in [[file:ch12.html#django_view_list_uml][Figure 12-5]] is =ListView=, which is an aggregate class, with no code at all (its body is just a docstring). When instantiated, a =ListView= has an =object_list= instance attribute through which the template can iterate to show the page contents, usually the result of a database query returning multiple objects. All the functionality related to generating this iterable of objects comes from the =MultipleObjectMixin=. That mixin also provides the complex pagination logic---to display part of the results in one page and links to more pages.
+
+Suppose you want to create a view that will not render a template, but will produce a list of objects in JSON format. Thats' why the =BaseListView= exists. It provides an easy-to-use extension point that brings together =View= and =MultipleObjectMixin= functionality, without the overhead of the template machinery.
+
+The Django class-based views API is a better example of multiple inheritance than Tkinter. In particular, it is easy to make sense of its mixin classes: each has a well-defined purpose, and they are all named with the =…Mixin= suffix.
+
+Class-based views were not universally embraced by Django users. Many do use them in a limited way, as black boxes, but when it's necessary to create something new, a lot of Django coders continue writing monolithic view functions that take care of all those responsibilities, instead of trying to reuse the base views and mixins.
+
+It does take some time to learn how to leverage class-based views and how to extend them to fulfill specific application needs, but I found that it was worthwhile to study them: they eliminate a lot of boilerplate code, make it easier to reuse solutions, and even improve team communication---for example, by defining standard names to templates, and to the variables passed to template contexts. Class-based views are Django views “on rails.”
+
+This concludes our tour of multiple inheritance and mixin classes.
+
+** Chapter Summary
+
+
+We started our coverage of inheritance explaining the problem with subclassing built-in types: their native methods implemented in C do not call overridden methods in subclasses, except in very few special cases. That's why, when we need a custom =list=, =dict=, or =str= type, it's easier to subclass =UserList=, =UserDict=, or =UserString=---all defined in the [[https://docs.python.org/3/library/collections.html][=collections= module]], which actually wraps the built-in types and delegate operations to them---three examples of favoring composition over inheritance in the standard library. If the desired behavior is very different from what the built-ins offer, it may be easier to subclass the appropriate ABC from [[https://docs.python.org/3/library/collections.abc.html][=collections.abc=]] and write your own implementation.
+
+The rest of the chapter was devoted to the double-edged sword of multiple inheritance. First we saw how the method resolution order, encoded in the =__mro__= class attribute, addresses the problem of potential naming conflicts in inherited methods. We also saw how the =super()= built-in follows the =__mro__= to call a method on a superclass. We then studied how multiple inheritance is used in the Tkinter GUI toolkit that comes with the Python standard library. Tkinter is not an example of current best practices, so we discussed some ways of coping with multiple inheritance, including careful use of mixin classes and avoiding multiple inheritance altogether by using composition instead. After considering how multiple inheritance is abused in Tkinter, we wrapped up by studying the core parts of the Django class-based views hierarchy, which I consider a better example of mixin usage.
+
+Lennart Regebro---a very experienced Pythonista and one of this book's technical reviewers---finds the design of Django's mixin views hierarchy confusing. But he also wrote:
+
+#+BEGIN_QUOTE
+  The dangers and badness of multiple inheritance are greatly overblown. I've actually never had a real big problem with it.
+#+END_QUOTE
+
+In the end, each of us may have different opinions about how to use multiple inheritance, or whether to use it at all in our own projects. But often we don't have a choice: the frameworks we must use impose their own choices.
+
+** Further Reading
+
+
+When using ABCs, multiple inheritance is not only common but practically inevitable, because each of the most fundamental collection ABCs (=Sequence=, =Mapping=, and =Set=) extend multiple ABCs. The source code for =collections.abc= ([[http://bit.ly/1QOA3Lt][/Lib/_collections_abc.py/]]) is a good example of multiple inheritance with ABCs---many of which are also mixin classes.
+
+Raymond Hettinger's post [[http://bit.ly/1JHSZfW][Python's super() considered super!]] explains the workings of =super= and multiple inheritance in Python from a positive perspective. It was written in response to [[https://fuhm.net/super-harmful/][Python's Super is nifty, but you can't use it (a.k.a. Python's Super Considered Harmful)]] by James Knight.
+
+Despite the titles of those posts, the problem is not really the =super= built-in---which in Python 3 is not as ugly as it was in Python 2. The real issue is multiple inheritance, which is inherently complicated and tricky. Michele Simionato goes beyond criticizing and actually offers a solution in his [[http://bit.ly/1HGpYxV][Setting Multiple Inheritance Straight]]: he implements traits, a constrained form of mixins that originated in the Self language. Simionato has a long series of illuminating blog posts about multiple inheritance in Python, including [[http://bit.ly/1HGpXdj][The wonders of cooperative inheritance, or using super in Python 3]]; [[http://bit.ly/1HGpXtQ][Mixins considered harmful, part 1]] and [[http://bit.ly/1HGq0G9][part 2]]; and [[http://bit.ly/1HGq1d4][Things to Know About Python Super, part 1]], [[http://bit.ly/1HGq1K7][part 2]] and [[http://bit.ly/1HGq48I][part 3]]. The oldest posts use the Python 2 =super= syntax, but are still relevant.
+
+I read the first edition of Grady Booch's /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), and highly recommend it as a general primer on object oriented thinking, independent of programming language. It is a rare book that covers multiple inheritance without prejudice.
+
+Soapbox
+
+*Think About the Classes You Really Need*
+
+The vast majority of programmers write applications, not frameworks. Even those who do write frameworks are likely to spend a lot (if not most) of their time writing applications. When we write applications, we normally don't need to code class hierarchies. At most, we write classes that subclass from ABCs or other classes provided by the framework. As application developers, it's very rare that we need to write a class that will act as the superclass of another. The classes we code are almost always leaf classes (i.e., leaves of the inheritance tree).
+
+If, while working as an application developer, you find yourself building multilevel class hierarchies, it's likely that one or more of the following applies:
+
+- You are reinventing the wheel. Go look for a framework or library that provides components you can reuse in your application.
+- You are using a badly designed framework. Go look for an alternative.
+- You are overengineering. Remember the /KISS principle/.
+- You became bored coding applications and decided to start a new framework. Congratulations and good luck!
+
+It's also possible that all of the above apply to your situation: you became bored and decided to reinvent the wheel by building your own overengineered and badly designed framework, which is forcing you to code class after class to solve trivial problems. Hopefully you are having fun, or at least getting paid for it.
+
+*Misbehaving Built-ins: Bug or Feature?*
+
+The built-in =dict=, =list=, and =str= types are essential building blocks of Python itself, so they must be fast---any performance issues in them would severely impact pretty much everything else. That's why CPython adopted the shortcuts that cause their built-in methods to misbehave by not cooperating with methods overridden by subclasses. A possible way out of this dilemma would be to offer two implementations for each of those types: one “internal,” optimized for use by the interpreter and an external, easily extensible one.
+
+But wait, this is what we have: =UserDict=, =UserList=, and =UserString= are not as fast as the built-ins but are easily extensible. The pragmatic approach taken by CPython means we also get to use, in our own applications, the highly optimized implementations that are hard to subclass. Which makes sense, considering that it's not so often that we need a custom mapping, list, or string, but we use =dict=, =list= and =str= every day. We just need to be aware of the trade-offs involved.
+
+*Inheritance Across Languages*
+
+Alan Kay coined the term “object oriented,” and Smalltalk had only single inheritance, although there are forks with various forms of multiple inheritance support, including the modern Squeak and Pharo Smalltalk dialects that support traits---a language construct that fulfills the role of a mixin class, while avoiding some of the issues with multiple inheritance.
+
+The first popular language to implement multiple inheritance was C++, and the feature was abused enough that Java---intended as a C++ replacement---was designed without support for multiple inheritance of implementation (i.e., no mixin classes). That is, until Java 8 introduced default methods that make interfaces very similar to the abstract classes used to define interfaces in C++ and in Python. Except that Java interfaces cannot have state---a key distinction. After Java, probably the most widely deployed JVM language is Scala, and it implements traits. Other languages supporting traits are the latest stable versions of PHP and Groovy, and the under-construction languages Rust and Perl 6---so it's fair to say that traits are trendy as I write this.
+
+Ruby offers an original take on multiple inheritance: it does not support it, but introduces mixins as a language feature. A Ruby class can include a module in its body, so the methods defined in the module become part of the class implementation. This is a “pure” form of mixin, with no inheritance involved, and it's clear that a Ruby mixin has no influence on the type of the class where it's used. This provides the benefits of mixins, while avoiding many of its usual problems.
+
+Two recent languages that are getting a lot of traction severely limit inheritance: Go and Julia. Go has no inheritance at all, but it implements interfaces in a way that resembles a static form of duck typing (see [[file:ch11.html#interfaces_soapbox][Soapbox]] for more about this). Julia avoids the terms “classes” and has only “types.” Julia has a type hierarchy but subtypes cannot inherit structure, only behaviors, and only abstract types can be subtyped. In addition, Julia methods are implemented using multiple dispatch---a more advanced form of the mechanism we saw in [[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]].
+
+
+
+--------------
+
+
+^{[[[#id410419][88]]]} Alan Kay, “The Early History of Smalltalk,” in SIGPLAN Not. 28, 3 (March 1993), 69--95. Also available [[http://propella.sakura.ne.jp/earlyHistoryST/EarlyHistoryST.html][online]]. Thanks to my friend Christiano Anderson who shared this reference as I was writing this chapter.
+
+
+^{[[[#id687166][89]]]} If you are curious, the experiment is in the /strkeydict_dictsub.py/ file in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]].
+
+
+^{[[[#id510585][90]]]} By the way, in this regard, PyPy behaves more “correctly” than CPython, at the expense of introducing a minor incompatibility. See [[http://bit.ly/1JHNmhX][“Differences between PyPy and CPython”]] for details.
+
+
+^{[[[#id764920][91]]]} In Python 2, the first line of =D.pingpong= would be written as =super(D, self).ping()= rather than =super().ping()=
+
+
+^{[[[#id922235][92]]]} As previously mentioned, Java 8 allows interfaces to provide method implementations as well. The new feature is called [[http://bit.ly/1JHPsyk][Default Methods]] in the official Java Tutorial.
+
+
+^{[[[#id610882][93]]]} In [[file:ch11.html#waterfowl_essay][Waterfowl and ABCs]], Alex Martelli quotes Scott Meyer's /More Effective C++/, which goes even further: “all non-leaf classes should be abstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+bstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+ if a concrete handler is available for the specific request.
+
+
+tured, multiline editable text widget. It has rich functionality of its own, but also inherits many methods from other classes. The left side shows a plain UML class diagram. On the right, it's decorated with arrows showing the MRO, as listed here with the help of the =print_mro= convenience function defined in [[file:ch12.html#various_mro_demo][Example 12-8]]:
+
+#+BEGIN_EXAMPLE
+    >>> import tkinter
+    >>> print_mro(tkinter.Text)
+    Text, Widget, BaseWidget, Misc, Pack, Place, Grid, XView, YView, object
+#+END_EXAMPLE
+
+
+
+[[file:images/flup_1202.png]]
+
+Figure 12-2. Left: UML class diagram of the Tkinter Text widget class and its superclasses. Right: Dashed arrows depict Text./mro/.
+
+In the next section, we'll discuss the pros and cons of multiple inheritance, with examples from real frameworks that use it.
+
+** Multiple Inheritance in the Real World
+
+
+It is possible to put multiple inheritance to good use. The Adapter pattern in the /Design Patterns/ book uses multiple inheritance, so it can't be completely wrong to do it (the remaining 22 patterns in the book use single inheritance only, so multiple inheritance is clearly not a cure-all).
+
+In the Python standard library, the most visible use of multiple inheritance is the =collections.abc= package. That is not controversial: after all, even Java supports multiple inheritance of interfaces, and ABCs are interface declarations that may optionally provide concrete method implementations.^{[[[#ftn.id922235][92]]]}
+
+An extreme example of multiple inheritance in the standard library is the Tkinter GUI toolkit ([[https://docs.python.org/3/library/tkinter.html][module =tkinter=: Python interface to Tcl/Tk]]). I used part of the Tkinter widget hierarchy to illustrate the MRO in [[file:ch12.html#tkwidgets_mro_uml][Figure 12-2]], but [[file:ch12.html#tkinter_uml][Figure 12-3]] shows all the widget classes in the =tkinter= base package (there are more widgets in the [[https://docs.python.org/3/library/tkinter.ttk.html][=tkinter.ttk= sub-package]]).
+
+
+
+[[file:images/flup_1203.png.jpg]]
+
+Figure 12-3. Summary UML diagram for the Tkinter GUI class hierarchy; classes tagged «mixin» are designed to provide concrete methods to other classes via multiple inheritance
+
+Tkinter is 20 years old as I write this, and is not an example of current best practices. But it shows how multiple inheritance was used when coders did not appreciate its drawbacks. And it will serve as a counter-example when we cover some good practices in the next section.
+
+Consider these classes from [[file:ch12.html#tkinter_uml][Figure 12-3]]:
+
+➊ =Toplevel=: The class of a top-level window in a Tkinter application.
+
+➋ =Widget=: The superclass of every visible object that can be placed on a window.
+
+➌ =Button=: A plain button widget.
+
+➍ =Entry=: A single-line editable text field.
+
+➎ =Text=: A multiline editable text field.
+
+Here are the MROs of those classes, displayed by the =print_mro= function from [[file:ch12.html#various_mro_demo][Example 12-8]]:
+
+#+BEGIN_EXAMPLE
+    >>> import tkinter
+    >>> print_mro(tkinter.Toplevel)
+    Toplevel, BaseWidget, Misc, Wm, object
+    >>> print_mro(tkinter.Widget)
+    Widget, BaseWidget, Misc, Pack, Place, Grid, object
+    >>> print_mro(tkinter.Button)
+    Button, Widget, BaseWidget, Misc, Pack, Place, Grid, object
+    >>> print_mro(tkinter.Entry)
+    Entry, Widget, BaseWidget, Misc, Pack, Place, Grid, XView, object
+    >>> print_mro(tkinter.Text)
+    Text, Widget, BaseWidget, Misc, Pack, Place, Grid, XView, YView, object
+#+END_EXAMPLE
+
+Things to note about how these classes relate to others:
+
+- =Toplevel= is the only graphical class that does not inherit from =Widget=, because it is the top-level window and does not behave like a widget---for example, it cannot be attached to a window or frame. =Toplevel= inherits from =Wm=, which provides direct access functions of the host window manager, like setting the window title and configuring its borders.
+- =Widget= inherits directly from =BaseWidget= and from =Pack=, =Place=, and =Grid=. These last three classes are geometry managers: they are responsible for arranging widgets inside a window or frame. Each encapsulates a different layout strategy and widget placement API.
+- =Button=, like most widgets, descends only from =Widget=, but indirectly from =Misc=, which provides dozens of methods to every widget.
+- =Entry= subclasses =Widget= and =XView=, the class that implements horizontal scrolling.
+- =Text= subclasses from =Widget=, =XView=, and =YView=, which provides vertical scrolling functionality.
+
+We'll now discuss some good practices of multiple inheritance and see whether Tkinter goes along with them.
+
+** Coping with Multiple Inheritance
+
+
+#+BEGIN_QUOTE
+  [...] we needed a better theory about inheritance entirely (and still do). For example, inheritance and instancing (which is a kind of inheritance) muddles both pragmatics (such as factoring code to save space) and semantics (used for way too many tasks such as: specialization, generalization, speciation, etc.).
+
+  --- Alan Kay /The Early History of Smalltalk/
+
+#+END_QUOTE
+
+As Alan Kay wrote, inheritance is used for different reasons, and multiple inheritance adds alternatives and complexity. It's easy to create incomprehensible and brittle designs using multiple inheritance. Because we don't have a comprehensive theory, here are a few tips to avoid spaghetti class graphs.
+
+*** 1. Distinguish Interface Inheritance from Implementation Inheritance
+
+
+A great resource to study these classes is the [[http://ccbv.co.uk/][Classy Class-Based Views]] website, where you can easily navigate through them, see all methods in each class (inherited, overridden, and added methods), view diagrams, browse their documentation, and jump to their [[http://bit.ly/1JHSoe8][source code on GitHub]].
+
+=View= is the base class of all views (it could be an ABC), and it provides core functionality like the =dispatch= method, which delegates to “handler” methods like =get=, =head=, =post=, etc., implemented by concrete subclasses to handle the different HTTP verbs.^{[[[#ftn.id654887][96]]]} The =RedirectView= class inherits only from =View=, and you can see that it implements =get=, =head=, =post=, etc.
+
+Concrete subclasses of =View= are supposed to implement the handler methods, so why aren't they part of the =View= interface? The reason: subclasses are free to implement just the handlers they want to support. A =TemplateView= is used only to display content, so it only implements =get=. If an HTTP =POST= request is sent to a =TemplateView=, the inherited =View.dispatch= method checks that there is no =post= handler, and produces an HTTP =405 Method Not Allowed= response.^{[[[#ftn.id660373][97]]]}
+
+
+
+[[file:images/flup_1204.png]]
+
+Figure 12-4. UML class diagram for the django.views.generic.base module
+
+The =TemplateResponseMixin= provides functionality that is of interest only to views that need to use a template. A =RedirectView=, for example, has no content body, so it has no need of a template and it does not inherit from this mixin. =TemplateResponseMixin= provides behaviors to =TemplateView= and other template-rendering views, such as =ListView=, =DetailView=, etc., defined in other modules of the =django.views.generic= package. [[file:ch12.html#django_view_list_uml][Figure 12-5]] depicts the =django.views.generic.list= module and part of the =base= module.
+
+
+
+[[file:images/flup_1205.png]]
+
+Figure 12-5. UML class diagram for the django.views.generic.list module. Here the three classes of the base module are collapsed (see [[file:ch12.html#django_view_base_uml][Figure 12-4]]). The ListView class has no methods or attributes: it's an aggregate class.
+
+For Django users, the most important class in [[file:ch12.html#django_view_list_uml][Figure 12-5]] is =ListView=, which is an aggregate class, with no code at all (its body is just a docstring). When instantiated, a =ListView= has an =object_list= instance attribute through which the template can iterate to show the page contents, usually the result of a database query returning multiple objects. All the functionality related to generating this iterable of objects comes from the =MultipleObjectMixin=. That mixin also provides the complex pagination logic---to display part of the results in one page and links to more pages.
+
+Suppose you want to create a view that will not render a template, but will produce a list of objects in JSON format. Thats' why the =BaseListView= exists. It provides an easy-to-use extension point that brings together =View= and =MultipleObjectMixin= functionality, without the overhead of the template machinery.
+
+The Django class-based views API is a better example of multiple inheritance than Tkinter. In particular, it is easy to make sense of its mixin classes: each has a well-defined purpose, and they are all named with the =…Mixin= suffix.
+
+Class-based views were not universally embraced by Django users. Many do use them in a limited way, as black boxes, but when it's necessary to create something new, a lot of Django coders continue writing monolithic view functions that take care of all those responsibilities, instead of trying to reuse the base views and mixins.
+
+It does take some time to learn how to leverage class-based views and how to extend them to fulfill specific application needs, but I found that it was worthwhile to study them: they eliminate a lot of boilerplate code, make it easier to reuse solutions, and even improve team communication---for example, by defining standard names to templates, and to the variables passed to template contexts. Class-based views are Django views “on rails.”
+
+This concludes our tour of multiple inheritance and mixin classes.
+
+** Chapter Summary
+
+
+We started our coverage of inheritance explaining the problem with subclassing built-in types: their native methods implemented in C do not call overridden methods in subclasses, except in very few special cases. That's why, when we need a custom =list=, =dict=, or =str= type, it's easier to subclass =UserList=, =UserDict=, or =UserString=---all defined in the [[https://docs.python.org/3/library/collections.html][=collections= module]], which actually wraps the built-in types and delegate operations to them---three examples of favoring composition over inheritance in the standard library. If the desired behavior is very different from what the built-ins offer, it may be easier to subclass the appropriate ABC from [[https://docs.python.org/3/library/collections.abc.html][=collections.abc=]] and write your own implementation.
+
+The rest of the chapter was devoted to the double-edged sword of multiple inheritance. First we saw how the method resolution order, encoded in the =__mro__= class attribute, addresses the problem of potential naming conflicts in inherited methods. We also saw how the =super()= built-in follows the =__mro__= to call a method on a superclass. We then studied how multiple inheritance is used in the Tkinter GUI toolkit that comes with the Python standard library. Tkinter is not an example of current best practices, so we discussed some ways of coping with multiple inheritance, including careful use of mixin classes and avoiding multiple inheritance altogether by using composition instead. After considering how multiple inheritance is abused in Tkinter, we wrapped up by studying the core parts of the Django class-based views hierarchy, which I consider a better example of mixin usage.
+
+Lennart Regebro---a very experienced Pythonista and one of this book's technical reviewers---finds the design of Django's mixin views hierarchy confusing. But he also wrote:
+
+#+BEGIN_QUOTE
+  The dangers and badness of multiple inheritance are greatly overblown. I've actually never had a real big problem with it.
+#+END_QUOTE
+
+In the end, each of us may have different opinions about how to use multiple inheritance, or whether to use it at all in our own projects. But often we don't have a choice: the frameworks we must use impose their own choices.
+
+** Further Reading
+
+
+When using ABCs, multiple inheritance is not only common but practically inevitable, because each of the most fundamental collection ABCs (=Sequence=, =Mapping=, and =Set=) extend multiple ABCs. The source code for =collections.abc= ([[http://bit.ly/1QOA3Lt][/Lib/_collections_abc.py/]]) is a good example of multiple inheritance with ABCs---many of which are also mixin classes.
+
+Raymond Hettinger's post [[http://bit.ly/1JHSZfW][Python's super() considered super!]] explains the workings of =super= and multiple inheritance in Python from a positive perspective. It was written in response to [[https://fuhm.net/super-harmful/][Python's Super is nifty, but you can't use it (a.k.a. Python's Super Considered Harmful)]] by James Knight.
+
+Despite the titles of those posts, the problem is not really the =super= built-in---which in Python 3 is not as ugly as it was in Python 2. The real issue is multiple inheritance, which is inherently complicated and tricky. Michele Simionato goes beyond criticizing and actually offers a solution in his [[http://bit.ly/1HGpYxV][Setting Multiple Inheritance Straight]]: he implements traits, a constrained form of mixins that originated in the Self language. Simionato has a long series of illuminating blog posts about multiple inheritance in Python, including [[http://bit.ly/1HGpXdj][The wonders of cooperative inheritance, or using super in Python 3]]; [[http://bit.ly/1HGpXtQ][Mixins considered harmful, part 1]] and [[http://bit.ly/1HGq0G9][part 2]]; and [[http://bit.ly/1HGq1d4][Things to Know About Python Super, part 1]], [[http://bit.ly/1HGq1K7][part 2]] and [[http://bit.ly/1HGq48I][part 3]]. The oldest posts use the Python 2 =super= syntax, but are still relevant.
+
+I read the first edition of Grady Booch's /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), and highly recommend it as a general primer on object oriented thinking, independent of programming language. It is a rare book that covers multiple inheritance without prejudice.
+
+Soapbox
+
+*Think About the Classes You Really Need*
+
+The vast majority of programmers write applications, not frameworks. Even those who do write frameworks are likely to spend a lot (if not most) of their time writing applications. When we write applications, we normally don't need to code class hierarchies. At most, we write classes that subclass from ABCs or other classes provided by the framework. As application developers, it's very rare that we need to write a class that will act as the superclass of another. The classes we code are almost always leaf classes (i.e., leaves of the inheritance tree).
+
+If, while working as an application developer, you find yourself building multilevel class hierarchies, it's likely that one or more of the following applies:
+
+- You are reinventing the wheel. Go look for a framework or library that provides components you can reuse in your application.
+- You are using a badly designed framework. Go look for an alternative.
+- You are overengineering. Remember the /KISS principle/.
+- You became bored coding applications and decided to start a new framework. Congratulations and good luck!
+
+It's also possible that all of the above apply to your situation: you became bored and decided to reinvent the wheel by building your own overengineered and badly designed framework, which is forcing you to code class after class to solve trivial problems. Hopefully you are having fun, or at least getting paid for it.
+
+*Misbehaving Built-ins: Bug or Feature?*
+
+The built-in =dict=, =list=, and =str= types are essential building blocks of Python itself, so they must be fast---any performance issues in them would severely impact pretty much everything else. That's why CPython adopted the shortcuts that cause their built-in methods to misbehave by not cooperating with methods overridden by subclasses. A possible way out of this dilemma would be to offer two implementations for each of those types: one “internal,” optimized for use by the interpreter and an external, easily extensible one.
+
+But wait, this is what we have: =UserDict=, =UserList=, and =UserString= are not as fast as the built-ins but are easily extensible. The pragmatic approach taken by CPython means we also get to use, in our own applications, the highly optimized implementations that are hard to subclass. Which makes sense, considering that it's not so often that we need a custom mapping, list, or string, but we use =dict=, =list= and =str= every day. We just need to be aware of the trade-offs involved.
+
+*Inheritance Across Languages*
+
+Alan Kay coined the term “object oriented,” and Smalltalk had only single inheritance, although there are forks with various forms of multiple inheritance support, including the modern Squeak and Pharo Smalltalk dialects that support traits---a language construct that fulfills the role of a mixin class, while avoiding some of the issues with multiple inheritance.
+
+The first popular language to implement multiple inheritance was C++, and the feature was abused enough that Java---intended as a C++ replacement---was designed without support for multiple inheritance of implementation (i.e., no mixin classes). That is, until Java 8 introduced default methods that make interfaces very similar to the abstract classes used to define interfaces in C++ and in Python. Except that Java interfaces cannot have state---a key distinction. After Java, probably the most widely deployed JVM language is Scala, and it implements traits. Other languages supporting traits are the latest stable versions of PHP and Groovy, and the under-construction languages Rust and Perl 6---so it's fair to say that traits are trendy as I write this.
+
+Ruby offers an original take on multiple inheritance: it does not support it, but introduces mixins as a language feature. A Ruby class can include a module in its body, so the methods defined in the module become part of the class implementation. This is a “pure” form of mixin, with no inheritance involved, and it's clear that a Ruby mixin has no influence on the type of the class where it's used. This provides the benefits of mixins, while avoiding many of its usual problems.
+
+Two recent languages that are getting a lot of traction severely limit inheritance: Go and Julia. Go has no inheritance at all, but it implements interfaces in a way that resembles a static form of duck typing (see [[file:ch11.html#interfaces_soapbox][Soapbox]] for more about this). Julia avoids the terms “classes” and has only “types.” Julia has a type hierarchy but subtypes cannot inherit structure, only behaviors, and only abstract types can be subtyped. In addition, Julia methods are implemented using multiple dispatch---a more advanced form of the mechanism we saw in [[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]].
+
+
+
+--------------
+
+
+^{[[[#id410419][88]]]} Alan Kay, “The Early History of Smalltalk,” in SIGPLAN Not. 28, 3 (March 1993), 69--95. Also available [[http://propella.sakura.ne.jp/earlyHistoryST/EarlyHistoryST.html][online]]. Thanks to my friend Christiano Anderson who shared this reference as I was writing this chapter.
+
+
+^{[[[#id687166][89]]]} If you are curious, the experiment is in the /strkeydict_dictsub.py/ file in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]].
+
+
+^{[[[#id510585][90]]]} By the way, in this regard, PyPy behaves more “correctly” than CPython, at the expense of introducing a minor incompatibility. See [[http://bit.ly/1JHNmhX][“Differences between PyPy and CPython”]] for details.
+
+
+^{[[[#id764920][91]]]} In Python 2, the first line of =D.pingpong= would be written as =super(D, self).ping()= rather than =super().ping()=
+
+
+^{[[[#id922235][92]]]} As previously mentioned, Java 8 allows interfaces to provide method implementations as well. The new feature is called [[http://bit.ly/1JHPsyk][Default Methods]] in the official Java Tutorial.
+
+
+^{[[[#id610882][93]]]} In [[file:ch11.html#waterfowl_essay][Waterfowl and ABCs]], Alex Martelli quotes Scott Meyer's /More Effective C++/, which goes even further: “all non-leaf classes should be abstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+bstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+ if a concrete handler is available for the specific request.
+
+
+erited methods. We also saw how the =super()= built-in follows the =__mro__= to call a method on a superclass. We then studied how multiple inheritance is used in the Tkinter GUI toolkit that comes with the Python standard library. Tkinter is not an example of current best practices, so we discussed some ways of coping with multiple inheritance, including careful use of mixin classes and avoiding multiple inheritance altogether by using composition instead. After considering how multiple inheritance is abused in Tkinter, we wrapped up by studying the core parts of the Django class-based views hierarchy, which I consider a better example of mixin usage.
+
+Lennart Regebro---a very experienced Pythonista and one of this book's technical reviewers---finds the design of Django's mixin views hierarchy confusing. But he also wrote:
+
+#+BEGIN_QUOTE
+  The dangers and badness of multiple inheritance are greatly overblown. I've actually never had a real big problem with it.
+#+END_QUOTE
+
+In the end, each of us may have different opinions about how to use multiple inheritance, or whether to use it at all in our own projects. But often we don't have a choice: the frameworks we must use impose their own choices.
+
+** Further Reading
+
+
+When using ABCs, multiple inheritance is not only common but practically inevitable, because each of the most fundamental collection ABCs (=Sequence=, =Mapping=, and =Set=) extend multiple ABCs. The source code for =collections.abc= ([[http://bit.ly/1QOA3Lt][/Lib/_collections_abc.py/]]) is a good example of multiple inheritance with ABCs---many of which are also mixin classes.
+
+Raymond Hettinger's post [[http://bit.ly/1JHSZfW][Python's super() considered super!]] explains the workings of =super= and multiple inheritance in Python from a positive perspective. It was written in response to [[https://fuhm.net/super-harmful/][Python's Super is nifty, but you can't use it (a.k.a. Python's Super Considered Harmful)]] by James Knight.
+
+Despite the titles of those posts, the problem is not really the =super= built-in---which in Python 3 is not as ugly as it was in Python 2. The real issue is multiple inheritance, which is inherently complicated and tricky. Michele Simionato goes beyond criticizing and actually offers a solution in his [[http://bit.ly/1HGpYxV][Setting Multiple Inheritance Straight]]: he implements traits, a constrained form of mixins that originated in the Self language. Simionato has a long series of illuminating blog posts about multiple inheritance in Python, including [[http://bit.ly/1HGpXdj][The wonders of cooperative inheritance, or using super in Python 3]]; [[http://bit.ly/1HGpXtQ][Mixins considered harmful, part 1]] and [[http://bit.ly/1HGq0G9][part 2]]; and [[http://bit.ly/1HGq1d4][Things to Know About Python Super, part 1]], [[http://bit.ly/1HGq1K7][part 2]] and [[http://bit.ly/1HGq48I][part 3]]. The oldest posts use the Python 2 =super= syntax, but are still relevant.
+
+I read the first edition of Grady Booch's /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), and highly recommend it as a general primer on object oriented thinking, independent of programming language. It is a rare book that covers multiple inheritance without prejudice.
+
+Soapbox
+
+*Think About the Classes You Really Need*
+
+The vast majority of programmers write applications, not frameworks. Even those who do write frameworks are likely to spend a lot (if not most) of their time writing applications. When we write applications, we normally don't need to code class hierarchies. At most, we write classes that subclass from ABCs or other classes provided by the framework. As application developers, it's very rare that we need to write a class that will act as the superclass of another. The classes we code are almost always leaf classes (i.e., leaves of the inheritance tree).
+
+If, while working as an application developer, you find yourself building multilevel class hierarchies, it's likely that one or more of the following applies:
+
+- You are reinventing the wheel. Go look for a framework or library that provides components you can reuse in your application.
+- You are using a badly designed framework. Go look for an alternative.
+- You are overengineering. Remember the /KISS principle/.
+- You became bored coding applications and decided to start a new framework. Congratulations and good luck!
+
+It's also possible that all of the above apply to your situation: you became bored and decided to reinvent the wheel by building your own overengineered and badly designed framework, which is forcing you to code class after class to solve trivial problems. Hopefully you are having fun, or at least getting paid for it.
+
+*Misbehaving Built-ins: Bug or Feature?*
+
+The built-in =dict=, =list=, and =str= types are essential building blocks of Python itself, so they must be fast---any performance issues in them would severely impact pretty much everything else. That's why CPython adopted the shortcuts that cause their built-in methods to misbehave by not cooperating with methods overridden by subclasses. A possible way out of this dilemma would be to offer two implementations for each of those types: one “internal,” optimized for use by the interpreter and an external, easily extensible one.
+
+But wait, this is what we have: =UserDict=, =UserList=, and =UserString= are not as fast as the built-ins but are easily extensible. The pragmatic approach taken by CPython means we also get to use, in our own applications, the highly optimized implementations that are hard to subclass. Which makes sense, considering that it's not so often that we need a custom mapping, list, or string, but we use =dict=, =list= and =str= every day. We just need to be aware of the trade-offs involved.
+
+*Inheritance Across Languages*
+
+Alan Kay coined the term “object oriented,” and Smalltalk had only single inheritance, although there are forks with various forms of multiple inheritance support, including the modern Squeak and Pharo Smalltalk dialects that support traits---a language construct that fulfills the role of a mixin class, while avoiding some of the issues with multiple inheritance.
+
+The first popular language to implement multiple inheritance was C++, and the feature was abused enough that Java---intended as a C++ replacement---was designed without support for multiple inheritance of implementation (i.e., no mixin classes). That is, until Java 8 introduced default methods that make interfaces very similar to the abstract classes used to define interfaces in C++ and in Python. Except that Java interfaces cannot have state---a key distinction. After Java, probably the most widely deployed JVM language is Scala, and it implements traits. Other languages supporting traits are the latest stable versions of PHP and Groovy, and the under-construction languages Rust and Perl 6---so it's fair to say that traits are trendy as I write this.
+
+Ruby offers an original take on multiple inheritance: it does not support it, but introduces mixins as a language feature. A Ruby class can include a module in its body, so the methods defined in the module become part of the class implementation. This is a “pure” form of mixin, with no inheritance involved, and it's clear that a Ruby mixin has no influence on the type of the class where it's used. This provides the benefits of mixins, while avoiding many of its usual problems.
+
+Two recent languages that are getting a lot of traction severely limit inheritance: Go and Julia. Go has no inheritance at all, but it implements interfaces in a way that resembles a static form of duck typing (see [[file:ch11.html#interfaces_soapbox][Soapbox]] for more about this). Julia avoids the terms “classes” and has only “types.” Julia has a type hierarchy but subtypes cannot inherit structure, only behaviors, and only abstract types can be subtyped. In addition, Julia methods are implemented using multiple dispatch---a more advanced form of the mechanism we saw in [[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]].
+
+
+
+--------------
+
+
+^{[[[#id410419][88]]]} Alan Kay, “The Early History of Smalltalk,” in SIGPLAN Not. 28, 3 (March 1993), 69--95. Also available [[http://propella.sakura.ne.jp/earlyHistoryST/EarlyHistoryST.html][online]]. Thanks to my friend Christiano Anderson who shared this reference as I was writing this chapter.
+
+
+^{[[[#id687166][89]]]} If you are curious, the experiment is in the /strkeydict_dictsub.py/ file in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]].
+
+
+^{[[[#id510585][90]]]} By the way, in this regard, PyPy behaves more “correctly” than CPython, at the expense of introducing a minor incompatibility. See [[http://bit.ly/1JHNmhX][“Differences between PyPy and CPython”]] for details.
+
+
+^{[[[#id764920][91]]]} In Python 2, the first line of =D.pingpong= would be written as =super(D, self).ping()= rather than =super().ping()=
+
+
+^{[[[#id922235][92]]]} As previously mentioned, Java 8 allows interfaces to provide method implementations as well. The new feature is called [[http://bit.ly/1JHPsyk][Default Methods]] in the official Java Tutorial.
+
+
+^{[[[#id610882][93]]]} In [[file:ch11.html#waterfowl_essay][Waterfowl and ABCs]], Alex Martelli quotes Scott Meyer's /More Effective C++/, which goes even further: “all non-leaf classes should be abstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+bstract” (i.e., concrete classes should not have concrete superclasses at all).
+
+
+^{[[[#id611639][94]]]} “A class that is constructed primarily by inheriting from mixins and does not add its own structure or behavior is called an /aggregate class/.”, Grady Booch et al., /Object Oriented Analysis and Design, 3E/ (Addison-Wesley, 2007), p. 109.
+
+
+^{[[[#id458738][95]]]} Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/, /Introduction/, p. 20.
+
+
+^{[[[#id654887][96]]]} Django programmers know that the =as_view= class method is the most visible part of the =View= interface, but it's not relevant to us here.
+
+
+^{[[[#id660373][97]]]} If you are into design patterns, you'll notice that the Django dispatch mechanism is a dynamic variation of the [[http://en.wikipedia.org/wiki/Template_method_pattern][Template Method pattern]]. It's dynamic because the =View= class does not force subclasses to implement all handlers, but =dispatch= checks at runtime if a concrete handler is available for the specific request.
+
+
+ if a concrete handler is available for the specific request.
+
+

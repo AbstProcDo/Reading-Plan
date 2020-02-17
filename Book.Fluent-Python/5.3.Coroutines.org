@@ -1,0 +1,1036 @@
+* Chapter 16. Coroutines
+
+
+In our simulation program, /taxi_sim.py/, a number of taxi cabs are created. Each will make a fixed number of trips and then go home. A taxi leaves the garage and starts “prowling”---looking for a passenger. This lasts until a passenger is picked up, and a trip starts. When the passenger is dropped off, the taxi goes back to prowling.
+
+The time elapsed during prowls and trips is generated using an exponential distribution. For a cleaner display, times are in whole minutes, but the simulation would work as well using =float= intervals.^{[[[#ftn.id1020168][140]]]} Each change of state in each cab is reported as an event. [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]] shows a sample run of the program.
+
+
+
+[[file:images/flup_1603.png.jpg]]
+
+Figure 16-3. Sample run of taxi_sim.py with three taxis. The -s 3 argument sets the random generator seed so program runs can be reproduced for debugging and demonstration. Colored arrows highlight taxi trips.
+
+The most important thing to note in [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]] is the interleaving of the trips by the three taxis. I manually added the arrows to make it easier to see the taxi trips: each arrow starts when a passenger is picked up and ends when the passenger is dropped off. Intuitively, this demonstrates how coroutines can be used for managing concurrent activities.
+
+Other things to note about [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]]:
+
+- Each taxi leaves the garage 5 minutes after the other.
+- It took 2 minutes for taxi 0 to pick up the first passenger at =time=2=; 3 minutes for taxi 1 (=time=8=), and 5 minutes for taxi 2 (=time=15=).
+- The cabbie in taxi 0 only makes two trips (purple arrows): the first starts at =time=2= and ends at =time=18=; the second starts at =time=28= and ends at =time=65=---the longest trip in this simulation run.
+- Taxi 1 makes four trips (green arrows) then goes home at =time=110=.
+- Taxi 2 makes six trips (red arrows) then goes home at =time=109=. His last trip lasts only one minute, starting at =time=97=.^{[[[#ftn.id1045449][141]]]}
+- While taxi 1 is making her first trip, starting at =time=8=, taxi 2 leaves the garage at =time=10= and completes two trips (short red arrows).
+- In this sample run, all scheduled events completed in the default simulation time of 180 minutes; last event was at =time=110=.
+
+The simulation may also end with pending events. When that happens, the final message reads like this:
+
+#+BEGIN_EXAMPLE
+    *** end of simulation time: 3 events pending ***
+#+END_EXAMPLE
+
+The full listing of /taxi_sim.py/ is at [[file:apa.html#support_taxi_sim][Example A-6]]. In this chapter, we'll show only the parts that are relevant to our study of coroutines. The really important functions are only two: =taxi_process= (a coroutine), and the =Simulator.run= method where the main loop of the simulation is executed.
+
+[[file:ch16.html#ex_taxi_process][Example 16-20]] shows the code for =taxi_process=. This coroutine uses two objects defined elsewhere: the =compute_delay= function, which returns a time interval in minutes, and the =Event= class, a =namedtuple= defined like this:
+
+#+BEGIN_EXAMPLE
+    Event = collections.namedtuple('Event', 'time proc action')
+#+END_EXAMPLE
+
+In an =Event= instance, =time= is the simulation time when the event will occur, =proc= is the identifier of the taxi process instance, and =action= is a string describing the activity.
+
+Let's review =taxi_process= play by play in [[file:ch16.html#ex_taxi_process][Example 16-20]].
+
+
+
+Example 16-20. taxi_sim.py: taxi_process coroutine that implements the activities of each taxi
+
+#+BEGIN_EXAMPLE
+    def taxi_process(ident, trips, start_time=0):   
+        """Yield to simulator issuing event at each state change"""
+        time = yield Event(start_time, ident, 'leave garage')   
+        for i in range(trips):   
+            time = yield Event(time, ident, 'pick up passenger')   
+            time = yield Event(time, ident, 'drop off passenger')   
+
+        yield Event(time, ident, 'going home')   
+        # end of taxi process  
+#+END_EXAMPLE
+
+- [[#CO191-1][[[file:callouts/1.png]]]]  :: =taxi_process= will be called once per taxi, creating a generator object to represent its operations. =ident= is the number of the taxi (e.g., 0, 1, 2 in the sample run); =trips= is the number of trips this taxi will make before going home; =start_time= is when the taxi leaves the garage.
+
+- [[#CO191-2][[[file:callouts/2.png]]]]  :: The first =Event= yielded is ='leave garage'=. This suspends the coroutine, and lets the simulation main loop proceed to the next scheduled event. When it's time to reactivate this process, the main loop will =send= the current simulation time, which is assigned to =time=.
+
+- [[#CO191-3][[[file:callouts/3.png]]]]  :: This block will be repeated once for each trip.
+
+- [[#CO191-4][[[file:callouts/4.png]]]]  :: An =Event= signaling passenger pick up is yielded. The coroutine pauses here. When the time comes to reactivate this coroutine, the main loop will again =send= the current time.
+
+- [[#CO191-5][[[file:callouts/5.png]]]]  :: An =Event= signaling passenger drop off is yielded. The coroutine is suspended again, waiting for the main loop to send it the time of when it's reactivated.
+
+- [[#CO191-6][[[file:callouts/6.png]]]]  :: The =for= loop ends after the given number of trips, and a final ='going home'= event is yielded. The coroutine will suspend for the last time. When reactivated, it will be sent the time from the simulation main loop, but here I don't assign it to any variable because it will not be used.
+
+- [[#CO191-7][[[file:callouts/7.png]]]]  :: When the coroutine falls off the end, the generator object raises =StopIteration=.
+
+You can “drive” a taxi yourself by calling =taxi_process= in the Python console.^{[[[#ftn.id1005607][142]]]} [[file:ch16.html#demo_taxi_process][Example 16-21]] shows how.
+
+
+
+Example 16-21. Driving the taxi_process coroutine
+
+#+BEGIN_EXAMPLE
+    >>> from taxi_sim import taxi_process
+    >>> taxi = taxi_process(ident=13, trips=2, start_time=0)  
+    >>> next(taxi)  
+    Event(time=0, proc=13, action='leave garage')
+    >>> taxi.send(_.time + 7)  
+    Event(time=7, proc=13, action='pick up passenger')  
+    >>> taxi.send(_.time + 23)  
+    Event(time=30, proc=13, action='drop off passenger')
+    >>> taxi.send(_.time + 5)  
+    Event(time=35, proc=13, action='pick up passenger')
+    >>> taxi.send(_.time + 48)  
+    Event(time=83, proc=13, action='drop off passenger')
+    >>> taxi.send(_.time + 1)
+    Event(time=84, proc=13, action='going home')  
+    >>> taxi.send(_.time + 10)  
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+    StopIteration
+#+END_EXAMPLE
+
+- [[#CO192-1][[[file:callouts/1.png]]]]  :: Create a generator object to represent a taxi with =ident=13= that will make two trips and start working at =t=0=.
+
+- [[#CO192-2][[[file:callouts/2.png]]]]  :: Prime the coroutine; it yields the initial event.
+
+- [[#CO192-3][[[file:callouts/3.png]]]]  :: We can now =send= it the current time. In the console, the =_= variable is bound to the last result; here I add =7= to the time, which means the =taxi= will spend 7 minutes searching for the first passenger.
+
+- [[#CO192-4][[[file:callouts/4.png]]]]  :: This is yielded by the =for= loop at the start of the first trip.
+
+- [[#CO192-5][[[file:callouts/5.png]]]]  :: Sending =_.time + 23= means the trip with the first passenger will last 23 minutes.
+
+- [[#CO192-6][[[file:callouts/6.png]]]]  :: Then the =taxi= will prowl for 5 minutes.
+
+- [[#CO192-7][[[file:callouts/7.png]]]]  :: The last trip will take 48 minutes.
+
+- [[#CO192-8][[[file:callouts/8.png]]]]  :: After two complete trips, the loop ends and the ='going home'= event is yielded.
+
+- [[#CO192-9][[[file:callouts/9.png]]]]  :: The next attempt to =send= to the coroutine causes it to fall through the end. When it returns, the interpreter raises =StopIteration=.
+
+Note that in [[file:ch16.html#demo_taxi_process][Example 16-21]] I am using the console to emulate the simulation main loop. I get the =.time= attribute of an =Event= yielded by the =taxi= coroutine, add an arbitrary number, and use the sum in the next =taxi.send= call to reactivate it. In the simulation, the taxi coroutines are driven by the main loop in the =Simulator.run= method. The simulation “clock” is held in the =sim_time= variable, and is updated by the time of each event yielded.
+
+To instantiate the =Simulator= class, the =main= function of /taxi_sim.py/ builds a =taxis= dictionary like this:
+
+#+BEGIN_EXAMPLE
+        taxis = {i: taxi_process(i, (i + 1) * 2, i * DEPARTURE_INTERVAL)
+                 for i in range(num_taxis)}
+        sim = Simulator(taxis)
+#+END_EXAMPLE
+
+=DEPARTURE_INTERVAL= is 5; if =num_taxis= is =3= as in the sample run, the preceding lines will do the same as:
+
+#+BEGIN_EXAMPLE
+        taxis = {0: taxi_process(ident=0, trips=2, start_time=0),
+                 1: taxi_process(ident=1, trips=4, start_time=5),
+                 2: taxi_process(ident=2, trips=6, start_time=10)}
+        sim = Simulator(taxis)
+#+END_EXAMPLE
+
+Therefore, the values of the =taxis= dictionary will be three distinct generator objects with different parameters. For instance, taxi 1 will make 4 trips and begin looking for passengers at =start_time=5=. This =dict= is the only argument required to build a =Simulator= instance.
+
+The =Simulator.__init__= method is shown in [[file:ch16.html#ex_taxi_simulator_init][Example 16-22]]. The main data structures of =Simulator= are:
+
+-  =self.events=  :: A =PriorityQueue= to hold =Event= instances. A =PriorityQueue= lets you =put= items, then =get= them ordered by =item[0]=; i.e., the =time= attribute in the case of our =Event= =namedtuple= objects.
+-  =self.procs=  :: A =dict= mapping each process number to an active process in the simulation---a generator object representing one taxi. This will be bound to a copy of =taxis= =dict= shown earlier.
+
+
+
+Example 16-22. taxi_sim.py: Simulator class initializer
+
+#+BEGIN_EXAMPLE
+    class Simulator:
+
+        def __init__(self, procs_map):
+            self.events = queue.PriorityQueue()  
+            self.procs = dict(procs_map)  
+#+END_EXAMPLE
+
+- [[#CO193-1][[[file:callouts/1.png]]]]  :: The =PriorityQueue= to hold the scheduled events, ordered by increasing time.
+
+- [[#CO193-2][[[file:callouts/2.png]]]]  :: We get the =procs_map= argument as a =dict= (or any mapping), but build a =dict= from it, to have a local copy because when the simulation runs, each taxi that goes home is removed from =self.procs=, and we don't want to change the object passed by the user.
+
+Priority queues are a fundamental building block of discrete event simulations: events are created in any order, placed in the queue, and later retrieved in order according to the scheduled time of each one. For example, the first two events placed in the queue may be:
+
+#+BEGIN_EXAMPLE
+    Event(time=14, proc=0, action='pick up passenger')
+    Event(time=11, proc=1, action='pick up passenger')
+#+END_EXAMPLE
+
+This means that taxi 0 will take 14 minutes to pick up the first passenger, while taxi 1---starting at =time=10=---will take 1 minute and pick up a passenger at =time=11=. If those two events are in the queue, the first event the main loop gets from the priority queue will be =Event(time=11, proc=1, action='pick up passenger')=.
+
+Now let's study the main algorithm of the simulation, the =Simulator.run= method. It's invoked by the =main= function right after the =Simulator= is instantiated, like this:
+
+#+BEGIN_EXAMPLE
+        sim = Simulator(taxis)
+        sim.run(end_time)
+#+END_EXAMPLE
+
+The listing with callouts for the =Simulator= class is in [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]], but here is a high-level view of the algorithm implemented in =Simulator.run=:
+
+1. Loop over processes representing taxis.
+
+   1. Prime the coroutine for each taxi by calling =next()= on it. This will yield the first =Event= for each taxi.
+   2. Put each event in the =self.events= queue of the =Simulator=.
+
+2. Run the main loop of the simulation while =sim_time= < =end_time=.
+
+   1. Check if =self.events= is empty; if so, break from the loop.
+   2. Get the =current_event= from =self.events=. This will be the =Event= object with the lowest time in the =PriorityQueue=.
+   3. Display the =Event=.
+   4. Update the simulation time with the =time= attribute of the =current_event=.
+   5. Send the time to the coroutine identified by the =proc= attribute of the =current_event=. The coroutine will yield the =next_event=.
+   6. Schedule =next_event= by adding it to the =self.events= queue.
+
+The complete =Simulator= class is [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]].
+
+
+
+Example 16-23. taxi_sim.py: Simulator, a bare-bones discrete event simulation class; focus on the run method
+
+#+BEGIN_EXAMPLE
+    class Simulator:
+
+        def __init__(self, procs_map):
+            self.events = queue.PriorityQueue()
+            self.procs = dict(procs_map)
+
+        def run(self, end_time):   
+            """Schedule and display events until time is up"""
+            # schedule the first event for each cab
+            for _, proc in sorted(self.procs.items()):   
+                first_event = next(proc)   
+                self.events.put(first_event)   
+
+            # main loop of the simulation
+            sim_time = 0   
+            while sim_time < end_time:   
+                if self.events.empty():   
+                    print('*** end of events ***')
+                    break
+
+                current_event = self.events.get()   
+                sim_time, proc_id, previous_action = current_event   
+                print('taxi:', proc_id, proc_id * '   ', current_event)   
+                active_proc = self.procs[proc_id]   
+                next_time = sim_time + compute_duration(previous_action)   
+                try:
+                    next_event = active_proc.send(next_time)   
+                except StopIteration:
+                    del self.procs[proc_id]   
+                else:
+                    self.events.put(next_event)   
+            else:   
+                msg = '*** end of simulation time: {} events pending ***'
+                print(msg.format(self.events.qsize()))
+#+END_EXAMPLE
+
+- [[#CO194-1][[[file:callouts/1.png]]]]  :: The simulation =end_time= is the only required argument for =run=.
+
+- [[#CO194-2][[[file:callouts/2.png]]]]  :: Use =sorted= to retrieve the =self.procs= items ordered by the key; we don't care about the key, so assign it to =_=.
+
+- [[#CO194-3][[[file:callouts/3.png]]]]  :: =next(proc)= primes each coroutine by advancing it to the first yield, so it's ready to be sent data. An =Event= is yielded.
+
+- [[#CO194-4][[[file:callouts/4.png]]]]  :: Add each event to the =self.events= =PriorityQueue=. The first event for each taxi is ='leave garage'=, as seen in the sample run ([[file:ch16.html#ex_taxi_process][Example 16-20]]).
+
+- [[#CO194-5][[[file:callouts/5.png]]]]  :: Zero =sim_time=, the simulation clock.
+
+- [[#CO194-6][[[file:callouts/6.png]]]]  :: Main loop of the simulation: run while =sim_time= is less than the =end_time=.
+
+- [[#CO194-7][[[file:callouts/7.png]]]]  :: The main loop may also exit if there are no pending events in the queue.
+
+- [[#CO194-8][[[file:callouts/8.png]]]]  :: Get =Event= with the smallest =time= in the priority queue; this is the =current_event=.
+
+- [[#CO194-9][[[file:callouts/9.png]]]]  :: Unpack the =Event= data. This line updates the simulation clock, =sim_time=, to reflect the time when the event happened.^{[[[#ftn.id1017705][143]]]}
+
+- [[#CO194-10][[[file:callouts/10.png]]]]  :: Display the =Event=, identifying the taxi and adding indentation according to the taxi ID.
+
+- [[#CO194-11][[[file:callouts/11.png]]]]  :: Retrieve the coroutine for the active taxi from the =self.procs= dictionary.
+
+- [[#CO194-12][[[file:callouts/12.png]]]]  :: Compute the next activation time by adding the =sim_time= and the result of calling =compute_duration(…)= with the previous action (e.g., ='pick up passenger'=, ='drop off passenger'=, etc.)
+
+- [[#CO194-13][[[file:callouts/13.png]]]]  :: Send the =time= to the taxi coroutine. The coroutine will yield the =next_event= or raise =StopIteration= when it's finished.
+
+- [[#CO194-14][[[file:callouts/14.png]]]]  :: If =StopIteration= is raised, delete the coroutine from the =self.procs= dictionary.
+
+- [[#CO194-15][[[file:callouts/15.png]]]]  :: Otherwise, put the =next_event= in the queue.
+
+- [[#CO194-16][[[file:callouts/16.png]]]]  :: If the loop exits because the simulation time passed, display the number of events pending (which may be zero by coincidence, sometimes).
+
+Linking back to [[file:ch15.html][Chapter 15]], note that the =Simulator.run= method in [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]] uses =else= blocks in two places that are not =if= statements:
+
+- The main =while= loop has an =else= statement to report that the simulation ended because the =end_time= was reached---and not because there were no more events to process.
+- The =try= statement at the bottom of the =while= loop tries to get a =next_event= by sending the =next_time= to the current taxi process, and if that is successful the =else= block puts the =next_event= into the =self.events= queue.
+
+I believe the code in =Simulator.run= would be a bit harder to read without those =else= blocks.
+
+The point of this example was to show a main loop processing events and driving coroutines by sending data to them. This is the basic idea behind =asyncio=, which we'll study in [[file:ch18.html][Chapter 18]].
+
+** The Meaning of yield from
+
+
+While developing PEP 380, Greg Ewing---the author---was questioned about the complexity of the proposed semantics. One of his answers was “For humans, almost all the important information is contained in one paragraph near the top.” He then quoted part of the draft of PEP 380 which at the time read as follows:
+
+#+BEGIN_QUOTE
+  “When the iterator is another generator, the effect is the same as if the body of the subgenerator were inlined at the point of the =yield from= expression. Furthermore, the subgenerator is allowed to execute a =return= statement with a value, and that value becomes the value of the =yield from= expression.”^{[[[#ftn.id392718][136]]]}
+#+END_QUOTE
+
+Those soothing words are no longer part of the PEP---because they don't cover all the corner cases. But they are OK as a first approximation.
+
+The approved version of PEP 380 explains the behavior of =yield from= in six points in the [[https://www.python.org/dev/peps/pep-0380/#proposal][Proposal section]]. I reproduce them almost exactly here, except that I replaced every occurrence of the ambiguous word “iterator” with “subgenerator” and added a few clarifications. [[file:ch16.html#ex_coroaverager3][Example 16-17]] illustrates these four points:
+
+- Any values that the subgenerator yields are passed directly to the caller of the delegating generator (i.e., the client code).
+- Any values sent to the delegating generator using =send()= are passed directly to the subgenerator. If the sent value is =None=, the subgenerator's =__next__()= method is called. If the sent value is not =None=, the subgenerator's =send()= method is called. If the call raises =StopIteration=, the delegating generator is resumed. Any other exception is propagated to the delegating generator.
+- =return expr= in a generator (or subgenerator) causes =StopIteration(expr)= to be raised upon exit from the generator.
+- The value of the =yield from= expression is the first argument to the =StopIteration= exception raised by the subgenerator when it terminates.
+
+The other two features of =yield from= have to do with exceptions and termination:
+
+- Exceptions other than =GeneratorExit= thrown into the delegating generator are passed to the =throw()= method of the subgenerator. If the call raises =StopIteration=, the delegating generator is resumed. Any other exception is propagated to the delegating generator.
+- If a =GeneratorExit= exception is thrown into the delegating generator, or the =close()= method of the delegating generator is called, then the =close()= method of the subgenerator is called if it has one. If this call results in an exception, it is propagated to the delegating generator. Otherwise, =GeneratorExit= is raised in the delegating generator.
+
+The detailed semantics of =yield from= are subtle, especially the points dealing with exceptions. Greg Ewing did a great job putting them to words in English in PEP 380.
+
+Ewing also documented the behavior of =yield from= using pseudocode (with Python syntax). I personally found it useful to spend some time studying the pseudocode in PEP 380. However, the pseudocode is 40 lines long and not so easy to grasp at first.
+
+A good way to approach that pseudocode is to simplify it to handle only the most basic and common use case of =yield from=.
+
+Consider that =yield from= appears in a delegating generator. The client code drives delegating generator, which drives the subgenerator. So, to simplify the logic involved, let's pretend the client doesn't ever call =.throw(…)= or =.close()= on the delegating generator. Let's also pretend the subgenerator never raises an exception until it terminates, when =StopIteration= is raised by the interpreter.
+
+[[file:ch16.html#ex_coroaverager3][Example 16-17]] is a script where those simplifying assumptions hold. In fact, in much real-life code, the delegating generator is expected to run to completion. So let's see how =yield from= works in this happier, simpler world.
+
+Take a look at [[file:ch16.html#yield_from_expansion_simple_ex][Example 16-18]], which is an expansion of this single statement, in the body of the delegating generator:
+
+#+BEGIN_EXAMPLE
+    RESULT = yield from EXPR
+#+END_EXAMPLE
+
+Try to follow the logic in [[file:ch16.html#yield_from_expansion_simple_ex][Example 16-18]].
+
+
+
+Example 16-18. Simplified pseudocode equivalent to the statement RESULT = yield from EXPR in the delegating generator (this covers the simplest case: .throw(...) and .close() are not supported; the only exception handled is StopIteration)
+
+#+BEGIN_EXAMPLE
+    _i = iter(EXPR)   
+    try:
+        _y = next(_i)   
+    except StopIteration as _e:
+        _r = _e.value   
+    else:
+        while 1:   
+            _s = yield _y   
+            try:
+                _y = _i.send(_s)   
+            except StopIteration as _e:   
+                _r = _e.value
+                break
+
+    RESULT = _r   
+#+END_EXAMPLE
+
+- [[#CO189-1][[[file:callouts/1.png]]]]  :: The =EXPR= can be any iterable, because =iter()= is applied to get an iterator =_i= (this is the subgenerator).
+
+- [[#CO189-2][[[file:callouts/2.png]]]]  :: The subgenerator is primed; the result is stored to be the first yielded value =_y=.
+
+- [[#CO189-3][[[file:callouts/3.png]]]]  :: If =StopIteration= was raised, extract the =value= attribute from the exception and assign it to =_r=: this is the =RESULT= in the simplest case.
+
+- [[#CO189-4][[[file:callouts/4.png]]]]  :: While this loop is running, the delegating generator is blocked, operating just as a channel between the caller and the subgenerator.
+
+- [[#CO189-5][[[file:callouts/5.png]]]]  :: Yield the current item yielded from the subgenerator; wait for a value =_s= sent by the caller. Note that this is the only =yield= in this listing.
+
+- [[#CO189-6][[[file:callouts/6.png]]]]  :: Try to advance the subgenerator, forwarding the =_s= sent by the caller.
+
+- [[#CO189-7][[[file:callouts/7.png]]]]  :: If the subgenerator raised =StopIteration=, get the =value=, assign to =_r=, and exit the loop, resuming the delegating generator.
+
+- [[#CO189-8][[[file:callouts/8.png]]]]  :: =_r= is the =RESULT=: the value of the whole =yield from= expression.
+
+In this simplified pseudocode, I preserved the variable names used in the pseudocode published in PEP 380. The variables are:
+
+-  =_i= (iterator)  :: The subgenerator
+-  =_y= (yielded)  :: A value yielded from the subgenerator
+-  =_r= (result)  :: The eventual result (i.e., the value of the =yield from= expression when the subgenerator ends)
+-  =_s= (sent)  :: A value sent by the caller to the delegating generator, which is forwarded to the subgenerator
+-  =_e= (exception)  :: An exception (always an instance of =StopIteration= in this simplified pseudocode)
+
+Besides not handling =.throw(…)= and =.close()=, the simplified pseudocode always uses =.send(…)= to forward =next()= or =.send(…)= calls by the client to the subgenerator. Don't worry about these fine distinctions on a first reading. As mentioned, [[file:ch16.html#ex_coroaverager3][Example 16-17]] would run perfectly well if the =yield from= did only what is shown in the simplified pseudocode in [[file:ch16.html#yield_from_expansion_simple_ex][Example 16-18]].
+
+But the reality is more complicated, because of the need to handle =.throw(…)= and =.close()= calls from the client, which must be passed into the subgenerator. Also, the subgenerator may be a plain iterator that does not support =.throw(…)= or =.close()=, so this must be handled by the =yield from= logic. If the subgenerator does implement those methods, inside the subgenerator both methods cause exceptions to be raised, which must be handled by the =yield from= machinery as well. The subgenerator may also throw exceptions of its own, unprovoked by the caller, and this must also be dealt with in the =yield from= implementation. Finally, as an optimization, if the caller calls =next(…)= or =.send(None)=, both are forwarded as a =next(…)= call on the subgenerator; only if the caller sends a non-=None= value, the =.send(…)= method of the subgenerator is used.
+
+For your convenience, following is the complete pseudocode of the =yield from= expansion from PEP 380, syntax-highlighted and annotated. [[file:ch16.html#yield_from_expansion_ex][Example 16-19]] was copied verbatim; only the callout numbers were added by me.
+
+Again, the code shown in [[file:ch16.html#yield_from_expansion_ex][Example 16-19]] is an expansion of this single statement, in the body of the delegating generator:
+
+#+BEGIN_EXAMPLE
+    RESULT = yield from EXPR
+#+END_EXAMPLE
+
+
+
+Example 16-19. Pseudocode equivalent to the statement RESULT = yield from EXPR in the delegating generator
+
+#+BEGIN_EXAMPLE
+    _i = iter(EXPR)   
+    try:
+        _y = next(_i)   
+    except StopIteration as _e:
+        _r = _e.value   
+    else:
+        while 1:   
+            try:
+                _s = yield _y   
+            except GeneratorExit as _e:   
+                try:
+                    _m = _i.close
+                except AttributeError:
+                    pass
+                else:
+                    _m()
+                raise _e
+            except BaseException as _e:   
+                _x = sys.exc_info()
+                try:
+                    _m = _i.throw
+                except AttributeError:
+                    raise _e
+                else:   
+                    try:
+                        _y = _m(*_x)
+                    except StopIteration as _e:
+                        _r = _e.value
+                        break
+            else:   
+                try:   
+                    if _s is None:   
+                        _y = next(_i)
+                    else:
+                        _y = _i.send(_s)
+                except StopIteration as _e:   
+                    _r = _e.value
+                    break
+
+    RESULT = _r   
+#+END_EXAMPLE
+
+- [[#CO190-1][[[file:callouts/1.png]]]]  :: The =EXPR= can be any iterable, because =iter()= is applied to get an iterator =_i= (this is the subgenerator).
+
+- [[#CO190-2][[[file:callouts/2.png]]]]  :: The subgenerator is primed; the result is stored to be the first yielded value =_y=.
+
+- [[#CO190-3][[[file:callouts/3.png]]]]  :: If =StopIteration= was raised, extract the =value= attribute from the exception and assign it to =_r=: this is the =RESULT= in the simplest case.
+
+- [[#CO190-4][[[file:callouts/4.png]]]]  :: While this loop is running, the delegating generator is blocked, operating just as a channel between the caller and the subgenerator.
+
+- [[#CO190-5][[[file:callouts/5.png]]]]  :: Yield the current item yielded from the subgenerator; wait for a value =_s= sent by the caller. This is the only =yield= in this listing.
+
+- [[#CO190-6][[[file:callouts/6.png]]]]  :: This deals with closing the delegating generator and the subgenerator. Because the subgenerator can be any iterator, it may not have a =close= method.
+
+- [[#CO190-7][[[file:callouts/7.png]]]]  :: This deals with exceptions thrown in by the caller using =.throw(…)=. Again, the subgenerator may be an iterator with no =throw= method to be called---in which case the exception is raised in the delegating generator.
+
+- [[#CO190-8][[[file:callouts/8.png]]]]  :: If the subgenerator has a =throw= method, call it with the exception passed from the caller. The subgenerator may handle the exception (and the loop continues); it may raise =StopIteration= (the =_r= result is extracted from it, and the loop ends); or it may raise the same or another exception, which is not handled here and propagates to the delegating generator.
+
+- [[#CO190-9][[[file:callouts/9.png]]]]  :: If no exception was received when yielding...
+
+- [[#CO190-10][[[file:callouts/10.png]]]]  :: Try to advance the subgenerator...
+
+- [[#CO190-11][[[file:callouts/11.png]]]]  :: Call =next= on the subgenerator if the last value received from the caller was =None=, otherwise call =send=.
+
+- [[#CO190-12][[[file:callouts/12.png]]]]  :: If the subgenerator raised =StopIteration=, get the =value=, assign to =_r=, and exit the loop, resuming the delegating generator.
+
+- [[#CO190-13][[[file:callouts/13.png]]]]  :: =_r= is the =RESULT=: the value of the whole =yield from= expression.
+
+Most of the logic of the =yield from= pseudocode is implemented in six =try/except= blocks nested up to four levels deep, so it's a bit hard to read. The only other control flow keywords used are one =while=, one =if=, and one =yield=. Find the =while=, the =yield=, the =next(…)=, and the =.send(…)= calls: they will help you get an idea of how the whole structure works.
+
+Right at the top of [[file:ch16.html#yield_from_expansion_ex][Example 16-19]], one important detail revealed by the pseudocode is that the subgenerator is primed (second callout in [[file:ch16.html#yield_from_expansion_ex][Example 16-19]]).^{[[[#ftn.id423379][137]]]} This means that auto-priming decorators such as that in [[file:ch16.html#priming_decorator_sec][Decorators for Coroutine Priming]] are incompatible with =yield from=.
+
+In the [[http://bit.ly/1JIopTu][same message]] I quoted in the opening of this section, Greg Ewing has this to say about the pseudocode expansion of =yield from=:
+
+#+BEGIN_QUOTE
+  You're not meant to learn about it by reading the expansion---that's only there to pin down all the details for language lawyers.
+#+END_QUOTE
+
+Focusing on the details of the pseudocode expansion may not be helpful---depending on your learning style. Studying real code that uses =yield from= is certainly more profitable than poring over the pseudocode of its implementation. However, almost all the =yield from= examples I've seen are tied to asynchronous programming with the =asyncio= module, so they depend on an active event loop to work. We'll see =yield from= numerous times in [[file:ch18.html][Chapter 18]]. There are a few links in [[file:ch16.html#further_reading_coro_sec][Further Reading]] to interesting code using =yield from= without an event loop.
+
+We'll now move on to a classic example of coroutine usage: programming simulations. This example does not showcase =yield from=, but it does reveal how coroutines are used to manage concurrent activities on a single thread.
+
+** Use Case: Coroutines for Discrete Event Simulation
+
+
+#+BEGIN_QUOTE
+  Coroutines are a natural way of expressing many algorithms, such as simulations, games, asynchronous I/O, and other forms of event-driven programming or co-operative multitasking.^{[[[#ftn.id1050523][138]]]}
+
+  --- Guido van Rossum and Phillip J. Eby /PEP 342---Coroutines via Enhanced Generators/
+
+#+END_QUOTE
+
+In this section, I will describe a very simple simulation implemented using just coroutines and standard library objects. Simulation is a classic application of coroutines in the computer science literature. Simula, the first OO language, introduced the concept of coroutines precisely to support simulations.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-1
+    :CLASS: title
+    :END:
+
+The motivation for the following simulation example is not academic. Coroutines are the fundamental building block of the =asyncio= package. A simulation shows how to implement concurrent activities using coroutines instead of threads---and this will greatly help when we tackle =asyncio= with in [[file:ch18.html][Chapter 18]].
+
+Before going into the example, a word about simulations.
+
+*** About Discrete Event Simulations
+    :PROPERTIES:
+    :CUSTOM_ID: _about_discrete_event_simulations
+    :CLASS: title
+    :END:
+
+A discrete event simulation (DES) is a type of simulation where a system is modeled as a sequence of events. In a DES, the simulation “clock” does not advance by fixed increments, but advances directly to the simulated time of the next modeled event. For example, if we are simulating the operation of a taxi cab from a high-level perspective, one event is picking up a passenger, the next is dropping the passenger off. It doesn't matter if a trip takes 5 or 50 minutes: when the drop off event happens, the clock is updated to the end time of the trip in a single operation. In a DES, we can simulate a year of cab trips in less than a second. This is in contrast to a continuous simulation where the clock advances continuously by a fixed---and usually small---increment.
+
+Intuitively, turn-based games are examples of discrete event simulations: the state of the game only changes when a player moves, and while a player is deciding the next move, the simulation clock is frozen. Real-time games, on the other hand, are continuous simulations where the simulation clock is running all the time, the state of the game is updated many times per second, and slow players are at a real disadvantage.
+
+Both types of simulations can be written with multiple threads or a single thread using event-oriented programming techniques such as callbacks or coroutines driven by an event loop. It's arguably more natural to implement a continuous simulation using threads to account for actions happening in parallel in real time. On the other hand, coroutines offer exactly the right abstraction for writing a DES. SimPy^{[[[#ftn.id1016333][139]]]} is a DES package for Python that uses one coroutine to represent each process in the simulation.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-2
+    :CLASS: title
+    :END:
+
+In the field of simulation, the term /process/ refers to the activities of an entity in the model, and not to an OS process. A simulation process may be implemented as an OS process, but usually a thread or a coroutine is used for that purpose.
+
+If you are interested in simulations, SimPy is well worth studying. However, in this section, I will describe a very simple DES implemented using only standard library features. My goal is to help you develop an intuition about programming concurrent actions with coroutines. Understanding the next section will require careful study, but the reward will come as insights on how libraries such as =asyncio=, Twisted, and Tornado can manage many concurrent activities using a single thread of execution.
+
+*** The Taxi Fleet Simulation
+    :PROPERTIES:
+    :CUSTOM_ID: taxi_sim_sec
+    :CLASS: title
+    :END:
+
+In our simulation program, /taxi_sim.py/, a number of taxi cabs are created. Each will make a fixed number of trips and then go home. A taxi leaves the garage and starts “prowling”---looking for a passenger. This lasts until a passenger is picked up, and a trip starts. When the passenger is dropped off, the taxi goes back to prowling.
+
+The time elapsed during prowls and trips is generated using an exponential distribution. For a cleaner display, times are in whole minutes, but the simulation would work as well using =float= intervals.^{[[[#ftn.id1020168][140]]]} Each change of state in each cab is reported as an event. [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]] shows a sample run of the program.
+
+
+
+[[file:images/flup_1603.png.jpg]]
+
+Figure 16-3. Sample run of taxi_sim.py with three taxis. The -s 3 argument sets the random generator seed so program runs can be reproduced for debugging and demonstration. Colored arrows highlight taxi trips.
+
+The most important thing to note in [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]] is the interleaving of the trips by the three taxis. I manually added the arrows to make it easier to see the taxi trips: each arrow starts when a passenger is picked up and ends when the passenger is dropped off. Intuitively, this demonstrates how coroutines can be used for managing concurrent activities.
+
+Other things to note about [[file:ch16.html#demo_taxi_sample_run_fig][Figure 16-3]]:
+
+- Each taxi leaves the garage 5 minutes after the other.
+- It took 2 minutes for taxi 0 to pick up the first passenger at =time=2=; 3 minutes for taxi 1 (=time=8=), and 5 minutes for taxi 2 (=time=15=).
+- The cabbie in taxi 0 only makes two trips (purple arrows): the first starts at =time=2= and ends at =time=18=; the second starts at =time=28= and ends at =time=65=---the longest trip in this simulation run.
+- Taxi 1 makes four trips (green arrows) then goes home at =time=110=.
+- Taxi 2 makes six trips (red arrows) then goes home at =time=109=. His last trip lasts only one minute, starting at =time=97=.^{[[[#ftn.id1045449][141]]]}
+- While taxi 1 is making her first trip, starting at =time=8=, taxi 2 leaves the garage at =time=10= and completes two trips (short red arrows).
+- In this sample run, all scheduled events completed in the default simulation time of 180 minutes; last event was at =time=110=.
+
+The simulation may also end with pending events. When that happens, the final message reads like this:
+
+#+BEGIN_EXAMPLE
+    *** end of simulation time: 3 events pending ***
+#+END_EXAMPLE
+
+The full listing of /taxi_sim.py/ is at [[file:apa.html#support_taxi_sim][Example A-6]]. In this chapter, we'll show only the parts that are relevant to our study of coroutines. The really important functions are only two: =taxi_process= (a coroutine), and the =Simulator.run= method where the main loop of the simulation is executed.
+
+[[file:ch16.html#ex_taxi_process][Example 16-20]] shows the code for =taxi_process=. This coroutine uses two objects defined elsewhere: the =compute_delay= function, which returns a time interval in minutes, and the =Event= class, a =namedtuple= defined like this:
+
+#+BEGIN_EXAMPLE
+    Event = collections.namedtuple('Event', 'time proc action')
+#+END_EXAMPLE
+
+In an =Event= instance, =time= is the simulation time when the event will occur, =proc= is the identifier of the taxi process instance, and =action= is a string describing the activity.
+
+Let's review =taxi_process= play by play in [[file:ch16.html#ex_taxi_process][Example 16-20]].
+
+
+
+Example 16-20. taxi_sim.py: taxi_process coroutine that implements the activities of each taxi
+
+#+BEGIN_EXAMPLE
+    def taxi_process(ident, trips, start_time=0):   
+        """Yield to simulator issuing event at each state change"""
+        time = yield Event(start_time, ident, 'leave garage')   
+        for i in range(trips):   
+            time = yield Event(time, ident, 'pick up passenger')   
+            time = yield Event(time, ident, 'drop off passenger')   
+
+        yield Event(time, ident, 'going home')   
+        # end of taxi process  
+#+END_EXAMPLE
+
+- [[#CO191-1][[[file:callouts/1.png]]]]  :: =taxi_process= will be called once per taxi, creating a generator object to represent its operations. =ident= is the number of the taxi (e.g., 0, 1, 2 in the sample run); =trips= is the number of trips this taxi will make before going home; =start_time= is when the taxi leaves the garage.
+
+- [[#CO191-2][[[file:callouts/2.png]]]]  :: The first =Event= yielded is ='leave garage'=. This suspends the coroutine, and lets the simulation main loop proceed to the next scheduled event. When it's time to reactivate this process, the main loop will =send= the current simulation time, which is assigned to =time=.
+
+- [[#CO191-3][[[file:callouts/3.png]]]]  :: This block will be repeated once for each trip.
+
+- [[#CO191-4][[[file:callouts/4.png]]]]  :: An =Event= signaling passenger pick up is yielded. The coroutine pauses here. When the time comes to reactivate this coroutine, the main loop will again =send= the current time.
+
+- [[#CO191-5][[[file:callouts/5.png]]]]  :: An =Event= signaling passenger drop off is yielded. The coroutine is suspended again, waiting for the main loop to send it the time of when it's reactivated.
+
+- [[#CO191-6][[[file:callouts/6.png]]]]  :: The =for= loop ends after the given number of trips, and a final ='going home'= event is yielded. The coroutine will suspend for the last time. When reactivated, it will be sent the time from the simulation main loop, but here I don't assign it to any variable because it will not be used.
+
+- [[#CO191-7][[[file:callouts/7.png]]]]  :: When the coroutine falls off the end, the generator object raises =StopIteration=.
+
+You can “drive” a taxi yourself by calling =taxi_process= in the Python console.^{[[[#ftn.id1005607][142]]]} [[file:ch16.html#demo_taxi_process][Example 16-21]] shows how.
+
+
+
+Example 16-21. Driving the taxi_process coroutine
+
+#+BEGIN_EXAMPLE
+    >>> from taxi_sim import taxi_process
+    >>> taxi = taxi_process(ident=13, trips=2, start_time=0)  
+    >>> next(taxi)  
+    Event(time=0, proc=13, action='leave garage')
+    >>> taxi.send(_.time + 7)  
+    Event(time=7, proc=13, action='pick up passenger')  
+    >>> taxi.send(_.time + 23)  
+    Event(time=30, proc=13, action='drop off passenger')
+    >>> taxi.send(_.time + 5)  
+    Event(time=35, proc=13, action='pick up passenger')
+    >>> taxi.send(_.time + 48)  
+    Event(time=83, proc=13, action='drop off passenger')
+    >>> taxi.send(_.time + 1)
+    Event(time=84, proc=13, action='going home')  
+    >>> taxi.send(_.time + 10)  
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+    StopIteration
+#+END_EXAMPLE
+
+- [[#CO192-1][[[file:callouts/1.png]]]]  :: Create a generator object to represent a taxi with =ident=13= that will make two trips and start working at =t=0=.
+
+- [[#CO192-2][[[file:callouts/2.png]]]]  :: Prime the coroutine; it yields the initial event.
+
+- [[#CO192-3][[[file:callouts/3.png]]]]  :: We can now =send= it the current time. In the console, the =_= variable is bound to the last result; here I add =7= to the time, which means the =taxi= will spend 7 minutes searching for the first passenger.
+
+- [[#CO192-4][[[file:callouts/4.png]]]]  :: This is yielded by the =for= loop at the start of the first trip.
+
+- [[#CO192-5][[[file:callouts/5.png]]]]  :: Sending =_.time + 23= means the trip with the first passenger will last 23 minutes.
+
+- [[#CO192-6][[[file:callouts/6.png]]]]  :: Then the =taxi= will prowl for 5 minutes.
+
+- [[#CO192-7][[[file:callouts/7.png]]]]  :: The last trip will take 48 minutes.
+
+- [[#CO192-8][[[file:callouts/8.png]]]]  :: After two complete trips, the loop ends and the ='going home'= event is yielded.
+
+- [[#CO192-9][[[file:callouts/9.png]]]]  :: The next attempt to =send= to the coroutine causes it to fall through the end. When it returns, the interpreter raises =StopIteration=.
+
+Note that in [[file:ch16.html#demo_taxi_process][Example 16-21]] I am using the console to emulate the simulation main loop. I get the =.time= attribute of an =Event= yielded by the =taxi= coroutine, add an arbitrary number, and use the sum in the next =taxi.send= call to reactivate it. In the simulation, the taxi coroutines are driven by the main loop in the =Simulator.run= method. The simulation “clock” is held in the =sim_time= variable, and is updated by the time of each event yielded.
+
+To instantiate the =Simulator= class, the =main= function of /taxi_sim.py/ builds a =taxis= dictionary like this:
+
+#+BEGIN_EXAMPLE
+        taxis = {i: taxi_process(i, (i + 1) * 2, i * DEPARTURE_INTERVAL)
+                 for i in range(num_taxis)}
+        sim = Simulator(taxis)
+#+END_EXAMPLE
+
+=DEPARTURE_INTERVAL= is 5; if =num_taxis= is =3= as in the sample run, the preceding lines will do the same as:
+
+#+BEGIN_EXAMPLE
+        taxis = {0: taxi_process(ident=0, trips=2, start_time=0),
+                 1: taxi_process(ident=1, trips=4, start_time=5),
+                 2: taxi_process(ident=2, trips=6, start_time=10)}
+        sim = Simulator(taxis)
+#+END_EXAMPLE
+
+Therefore, the values of the =taxis= dictionary will be three distinct generator objects with different parameters. For instance, taxi 1 will make 4 trips and begin looking for passengers at =start_time=5=. This =dict= is the only argument required to build a =Simulator= instance.
+
+The =Simulator.__init__= method is shown in [[file:ch16.html#ex_taxi_simulator_init][Example 16-22]]. The main data structures of =Simulator= are:
+
+-  =self.events=  :: A =PriorityQueue= to hold =Event= instances. A =PriorityQueue= lets you =put= items, then =get= them ordered by =item[0]=; i.e., the =time= attribute in the case of our =Event= =namedtuple= objects.
+-  =self.procs=  :: A =dict= mapping each process number to an active process in the simulation---a generator object representing one taxi. This will be bound to a copy of =taxis= =dict= shown earlier.
+
+
+
+Example 16-22. taxi_sim.py: Simulator class initializer
+
+#+BEGIN_EXAMPLE
+    class Simulator:
+
+        def __init__(self, procs_map):
+            self.events = queue.PriorityQueue()  
+            self.procs = dict(procs_map)  
+#+END_EXAMPLE
+
+- [[#CO193-1][[[file:callouts/1.png]]]]  :: The =PriorityQueue= to hold the scheduled events, ordered by increasing time.
+
+- [[#CO193-2][[[file:callouts/2.png]]]]  :: We get the =procs_map= argument as a =dict= (or any mapping), but build a =dict= from it, to have a local copy because when the simulation runs, each taxi that goes home is removed from =self.procs=, and we don't want to change the object passed by the user.
+
+Priority queues are a fundamental building block of discrete event simulations: events are created in any order, placed in the queue, and later retrieved in order according to the scheduled time of each one. For example, the first two events placed in the queue may be:
+
+#+BEGIN_EXAMPLE
+    Event(time=14, proc=0, action='pick up passenger')
+    Event(time=11, proc=1, action='pick up passenger')
+#+END_EXAMPLE
+
+This means that taxi 0 will take 14 minutes to pick up the first passenger, while taxi 1---starting at =time=10=---will take 1 minute and pick up a passenger at =time=11=. If those two events are in the queue, the first event the main loop gets from the priority queue will be =Event(time=11, proc=1, action='pick up passenger')=.
+
+Now let's study the main algorithm of the simulation, the =Simulator.run= method. It's invoked by the =main= function right after the =Simulator= is instantiated, like this:
+
+#+BEGIN_EXAMPLE
+        sim = Simulator(taxis)
+        sim.run(end_time)
+#+END_EXAMPLE
+
+The listing with callouts for the =Simulator= class is in [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]], but here is a high-level view of the algorithm implemented in =Simulator.run=:
+
+1. Loop over processes representing taxis.
+
+   1. Prime the coroutine for each taxi by calling =next()= on it. This will yield the first =Event= for each taxi.
+   2. Put each event in the =self.events= queue of the =Simulator=.
+
+2. Run the main loop of the simulation while =sim_time= < =end_time=.
+
+   1. Check if =self.events= is empty; if so, break from the loop.
+   2. Get the =current_event= from =self.events=. This will be the =Event= object with the lowest time in the =PriorityQueue=.
+   3. Display the =Event=.
+   4. Update the simulation time with the =time= attribute of the =current_event=.
+   5. Send the time to the coroutine identified by the =proc= attribute of the =current_event=. The coroutine will yield the =next_event=.
+   6. Schedule =next_event= by adding it to the =self.events= queue.
+
+The complete =Simulator= class is [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]].
+
+
+
+Example 16-23. taxi_sim.py: Simulator, a bare-bones discrete event simulation class; focus on the run method
+
+#+BEGIN_EXAMPLE
+    class Simulator:
+
+        def __init__(self, procs_map):
+            self.events = queue.PriorityQueue()
+            self.procs = dict(procs_map)
+
+        def run(self, end_time):   
+            """Schedule and display events until time is up"""
+            # schedule the first event for each cab
+            for _, proc in sorted(self.procs.items()):   
+                first_event = next(proc)   
+                self.events.put(first_event)   
+
+            # main loop of the simulation
+            sim_time = 0   
+            while sim_time < end_time:   
+                if self.events.empty():   
+                    print('*** end of events ***')
+                    break
+
+                current_event = self.events.get()   
+                sim_time, proc_id, previous_action = current_event   
+                print('taxi:', proc_id, proc_id * '   ', current_event)   
+                active_proc = self.procs[proc_id]   
+                next_time = sim_time + compute_duration(previous_action)   
+                try:
+                    next_event = active_proc.send(next_time)   
+                except StopIteration:
+                    del self.procs[proc_id]   
+                else:
+                    self.events.put(next_event)   
+            else:   
+                msg = '*** end of simulation time: {} events pending ***'
+                print(msg.format(self.events.qsize()))
+#+END_EXAMPLE
+
+- [[#CO194-1][[[file:callouts/1.png]]]]  :: The simulation =end_time= is the only required argument for =run=.
+
+- [[#CO194-2][[[file:callouts/2.png]]]]  :: Use =sorted= to retrieve the =self.procs= items ordered by the key; we don't care about the key, so assign it to =_=.
+
+- [[#CO194-3][[[file:callouts/3.png]]]]  :: =next(proc)= primes each coroutine by advancing it to the first yield, so it's ready to be sent data. An =Event= is yielded.
+
+- [[#CO194-4][[[file:callouts/4.png]]]]  :: Add each event to the =self.events= =PriorityQueue=. The first event for each taxi is ='leave garage'=, as seen in the sample run ([[file:ch16.html#ex_taxi_process][Example 16-20]]).
+
+- [[#CO194-5][[[file:callouts/5.png]]]]  :: Zero =sim_time=, the simulation clock.
+
+- [[#CO194-6][[[file:callouts/6.png]]]]  :: Main loop of the simulation: run while =sim_time= is less than the =end_time=.
+
+- [[#CO194-7][[[file:callouts/7.png]]]]  :: The main loop may also exit if there are no pending events in the queue.
+
+- [[#CO194-8][[[file:callouts/8.png]]]]  :: Get =Event= with the smallest =time= in the priority queue; this is the =current_event=.
+
+- [[#CO194-9][[[file:callouts/9.png]]]]  :: Unpack the =Event= data. This line updates the simulation clock, =sim_time=, to reflect the time when the event happened.^{[[[#ftn.id1017705][143]]]}
+
+- [[#CO194-10][[[file:callouts/10.png]]]]  :: Display the =Event=, identifying the taxi and adding indentation according to the taxi ID.
+
+- [[#CO194-11][[[file:callouts/11.png]]]]  :: Retrieve the coroutine for the active taxi from the =self.procs= dictionary.
+
+- [[#CO194-12][[[file:callouts/12.png]]]]  :: Compute the next activation time by adding the =sim_time= and the result of calling =compute_duration(…)= with the previous action (e.g., ='pick up passenger'=, ='drop off passenger'=, etc.)
+
+- [[#CO194-13][[[file:callouts/13.png]]]]  :: Send the =time= to the taxi coroutine. The coroutine will yield the =next_event= or raise =StopIteration= when it's finished.
+
+- [[#CO194-14][[[file:callouts/14.png]]]]  :: If =StopIteration= is raised, delete the coroutine from the =self.procs= dictionary.
+
+- [[#CO194-15][[[file:callouts/15.png]]]]  :: Otherwise, put the =next_event= in the queue.
+
+- [[#CO194-16][[[file:callouts/16.png]]]]  :: If the loop exits because the simulation time passed, display the number of events pending (which may be zero by coincidence, sometimes).
+
+Linking back to [[file:ch15.html][Chapter 15]], note that the =Simulator.run= method in [[file:ch16.html#ex_taxi_simulator_class][Example 16-23]] uses =else= blocks in two places that are not =if= statements:
+
+- The main =while= loop has an =else= statement to report that the simulation ended because the =end_time= was reached---and not because there were no more events to process.
+- The =try= statement at the bottom of the =while= loop tries to get a =next_event= by sending the =next_time= to the current taxi process, and if that is successful the =else= block puts the =next_event= into the =self.events= queue.
+
+I believe the code in =Simulator.run= would be a bit harder to read without those =else= blocks.
+
+The point of this example was to show a main loop processing events and driving coroutines by sending data to them. This is the basic idea behind =asyncio=, which we'll study in [[file:ch18.html][Chapter 18]].
+
+** Chapter Summary
+
+Guido van Rossum wrote there are three different styles of code you can write using generators:
+
+#+BEGIN_QUOTE
+  There's the traditional “pull” style (iterators), “push” style (like the averaging example), and then there are “tasks” (Have you read Dave Beazley's coroutines tutorial yet?...).^{[[[#ftn.id1023587][144]]]}
+#+END_QUOTE
+
+[[file:ch14.html][Chapter 14]] was devoted to iterators; this chapter introduced coroutines used in “push style” and also as very simple “tasks”---the taxi processes in the simulation example. [[file:ch18.html][Chapter 18]] will put them to use as asynchronous tasks in concurrent programming.
+
+The running average example demonstrated a common use for a coroutine: as an accumulator processing items sent to it. We saw how a decorator can be applied to prime a coroutine, making it more convenient to use in some cases. But keep in mind that priming decorators are not compatible with some uses of coroutines. In particular, =yield from subgenerator()= assumes the =subgenerator= is not primed, and primes it automatically.
+
+Accumulator coroutines can yield back partial results with each =send= method call, but they become more useful when they can return values, a feature that was added in Python 3.3 with PEP 380. We saw how the statement =return the_result= in a generator now raises =StopIteration(the_result)=, allowing the caller to retrieve =the_result= from the =value= attribute of the exception. This is a rather cumbersome way to retrieve coroutine results, but it's handled automatically by the =yield from= syntax introduced in PEP 380.
+
+The coverage of =yield from= started with trivial examples using simple iterables, then moved to an example highlighting the three main components of any significant use of =yield from=: the delegating generator (defined by the use of =yield from= in its body), the subgenerator activated by =yield from=, and the client code that actually drives the whole setup by sending values to the subgenerator through the pass-through channel established by =yield from= in the delegating generator. This section was wrapped up with a look at the formal definition of =yield from= behavior as described in PEP 380 using English and Python-like pseudocode.
+
+We closed the chapter with the discrete event simulation example, showing how generators can be used as an alternative to threads and callbacks to support concurrency. Although simple, the taxi simulation gives a first glimpse at how event-driven frameworks like Tornado and =asyncio= use a main loop to drive coroutines executing concurrent activities with a single thread of execution. In event-oriented programming with coroutines, each concurrent activity is carried out by a coroutine that repeatedly yields control back to the main loop, allowing other coroutines to be activated and move forward. This is a form of cooperative multitasking: coroutines voluntarily and explicitly yield control to the central scheduler. In contrast, threads implement preemptive multitasking. The scheduler can suspend threads at any time---even halfway through a statement---to give way to other threads.
+
+One final note: this chapter adopted a broad, informal definition of a coroutine: a generator function driven by a client sending it data through =.send(…)= calls or =yield from=. This broad definition is the one used in [[https://www.python.org/dev/peps/pep-0342/][PEP 342 --- Coroutines via Enhanced Generators]] and in most existing Python books as I write this. The =asyncio= library we'll see in [[file:ch18.html][Chapter 18]] is built on coroutines, but a stricter definition of coroutine is adopted there: =asyncio= coroutines are (usually) decorated with an =@asyncio.coroutine= decorator, and they are always driven by =yield from=, not by calling =.send(…)= directly on them. Of course, =asyncio= coroutines are driven by =next(…)= and =.send(…)= under the covers, but in user code we only use =yield from= to make them run.
+
+** Further Reading
+
+
+David Beazley is the ultimate authority on Python generators and coroutines. The /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, 3E]]/ (O'Reilly) he coauthored with Brian Jones has numerous recipes with coroutines. Beazley's PyCon tutorials on the subject are legendary for their depth and breadth. The first was at PyCon US 2008: [[http://www.dabeaz.com/generators/][“Generator Tricks for Systems Programmers”]]. PyCon US 2009 saw the legendary [[http://www.dabeaz.com/coroutines/][“A Curious Course on Coroutines and Concurrency”]] (hard-to-find video links for all three parts: [[http://pyvideo.org/video/213][part 1]], [[http://pyvideo.org/video/215][part 2]], [[http://pyvideo.org/video/214][part 3]]). His most recent tutorial from PyCon 2014 in Montréal was [[http://www.dabeaz.com/finalgenerator/][“Generators: The Final Frontier,”]] in which he tackles more concurrency examples---so it's really more about topics in [[file:ch18.html][Chapter 18]] of /Fluent Python/. Dave can't resist making brains explode in his classes, so in the last part of “The Final Frontier,” coroutines replace the classic Visitor pattern in an arithmetic expression evaluator.
+
+Coroutines allow new ways of organizing code, and just as recursion or polymorphism (dynamic dispatch), it takes some time getting used to their possibilities. An interesting example of classic algorithm rewritten with coroutines is in the post [[http://bit.ly/1HGsFQ0][“Greedy algorithm with coroutines,”]] by James Powell. You may also want to browse [[http://bit.ly/1HGsFzA][“Popular recipes tagged /coroutine/"]] in the ActiveState Code [[https://code.activestate.com/recipes/][recipes database]].
+
+Paul Sokolovsky implemented =yield from= in Damien George's super lean [[http://micropython.org][MicroPython]] interpreter designed to run on microcontrollers. As he studied the feature, he created a [[http://bit.ly/1JIqGxW][great, detailed diagram]] to explain how =yield from= works, and shared it in the python-tulip mailing list. Sokolovsky was kind enough to allow me to copy the PDF to this book's site, where it has a [[http://flupy.org/resources/yield-from.pdf][more permanent URL]].
+
+As I write this, the vast majority of uses of =yield from= to be found are in =asyncio= itself or code that uses it. I spent a lot of time looking for examples of =yield from= that did not depend on =asyncio=. Greg Ewing---who penned PEP 380 and implemented =yield from= in CPython---published [[http://bit.ly/1JIqJtu][a few examples]] of its use: a =BinaryTree= class, a simple XML parser, and a task scheduler.
+
+Brett Slatkin's [[http://www.effectivepython.com][/Effective Python/]] (Addison-Wesley) has an excellent short chapter titled “Consider Coroutines to Run Many Functions Concurrently” ([[http://bit.ly/1JIqNcZ][available online as a sample chapter]]). That chapter includes the best example of driving generators with =yield from= I've seen: an implementation of John Conway's [[http://bit.ly/1HGsKDw][Game of Life]] in which coroutines are used to manage the state of each cell as the game runs. The example code for /Effective Python/ can be found in [[https://github.com/bslatkin/effectivepython][a GitHub repository]]. I refactored the code for the Game of Life example---separating the functions and classes that implement the game from the testing snippets used in Slatkin's book ([[http://bit.ly/1JIqO0l][original code]]). I also rewrote the tests as doctests, so you can see the output of the various coroutines and classes without running the script. The [[http://bit.ly/1HGsO6j][refactored example]] is posted as a [[http://bit.ly/coro_life][GitHub gist]].
+
+Other interesting examples of =yield from= without =asyncio= appear in a message to the Python Tutor list, [[http://bit.ly/1JIqSxf][“Comparing two CSV files using Python”]] by Peter Otten, and a Rock-Paper-Scissors game in Ian Ward's [[http://bit.ly/1JIqQ8x][“Iterables, Iterators, and Generators”]] tutorial published as an iPython notebook.
+
+Guido van Rossum sent a long message to the python-tulip Google Group titled [[http://bit.ly/1JIqT44][“The difference between =yield= and =yield-from="]] that is worth reading. Nick Coghlan posted a heavily commented version of the =yield from= expansion to [[http://bit.ly/1JIqRcv][Python-Dev on March 21, 2009]]; in the same message, he wrote:
+
+#+BEGIN_QUOTE
+  Whether or not different people will find code using =yield from= difficult to understand or not will have more to do with their grasp of the concepts of cooperative multitasking in general more so than the underlying trickery involved in allowing truly nested generators.
+#+END_QUOTE
+
+[[https://www.python.org/dev/peps/pep-0492/][PEP 492 --- Coroutines with async and await syntax]] by Yury Selivanov proposes the addition of two keywords to Python: =async= and =await=. The former will be used with other existing keywords to define new language constructs. For example, =async def= will be used to define a coroutine, and =async for= to loop over asynchronous iterables with asynchronous iterators (implementing =__aiter__= and =__anext__=, coroutine versions of =__iter__= and =__next__=). To avoid conflict with the upcoming =async= keyword, the essential function =asyncio.async()= will be renamed =asyncio.ensure_future()= in Python 3.4.4. The =await= keyword will do something similar to =yield from=, but will only be allowed inside coroutines defined with =async def=---where the use of =yield= and =yield from= will be forbidden. With new syntax, the PEP establishes a clear separation between the legacy generators that evolved into coroutine-like objects and a new breed of native coroutine objects with better language support thanks to infrastructure like the =async= and =await= keywords and several new special methods. Coroutines are poised to become really important in the future of Python and the language should be adapted to better integrate them.
+
+Experimenting with discrete event simulations is a great way to become comfortable with cooperative multitasking. Wikipedia's [[http://bit.ly/1JIqXB1][“Discrete event simulation” article]] is a good place to start.^{[[[#ftn.id912321][145]]]} A short tutorial about writing discrete event simulations by hand (no special libraries) is Ashish Gupta's [[http://bit.ly/1JIqWgz][“Writing a Discrete Event Simulation: Ten Easy Lessons.”]] The code is in Java so it's class-based and uses no coroutines, but can easily be ported to Python. Regardless of the code, the tutorial is a good short introduction to the terminology and components of a discrete event simulation. Converting Gupta's examples to Python classes and then to classes leveraging coroutines is a good exercise.
+
+For a ready-to-use library in Python, using coroutines, there is SimPy. Its [[https://simpy.readthedocs.org/en/latest/][online documentation]] explains:
+
+#+BEGIN_QUOTE
+  SimPy is a process-based discrete-event simulation framework based on standard Python. Its event dispatcher is based on Python's generators and can also be used for asynchronous networking or to implement multi-agent systems (with both simulated and real communication).
+#+END_QUOTE
+
+Coroutines are not so new in Python but they were pretty much tied to niche application domains before asynchronous programming frameworks started supporting them, starting with Tornado. The addition of =yield from= in Python 3.3 and =asyncio= in Python 3.4 will likely boost the adoption of coroutines---and of Python 3.4 itself. However, Python 3.4 is less than a year old as I write this---so once you watch David Beazley's tutorials and cookbook examples on the subject, there isn't a whole lot of content out there that goes deep into Python coroutine programming. For now.
+
+Soapbox
+
+*Raise from lambda*
+
+In programming languages, keywords establish the basic rules of control flow and expression evaluation.
+
+A keyword in a language is like a piece in a board game. In the language of Chess, the keywords are ♔, ♕, ♖, ♗, ♘, and ♙. In the game of Go, it's ●.
+
+Chess players have six different types of pieces to implement their plans, whereas Go players seem to have only one type of piece. However, in the semantics of Go, adjacent pieces form larger, solid pieces of many different shapes, with emerging properties. Some arrangements of Go pieces are indestructible. Go is more expressive than Chess. In Go there are 361 possible opening moves, and an estimated =1e+170= legal positions; for Chess, the numbers are 20 opening moves =1e+50= positions.
+
+Adding a new piece to Chess would be a radical change. Adding a new keyword in a programming language is also a radical change. So it makes sense for language designers to be wary of introducing keywords.
+
+
+
+Table 16-1. Number of keywords in programming languages
+
+Keywords
+
+Language
+
+Comment
+
+5
+
+Smalltalk-80
+
+Famous for its minimalist syntax.
+
+25
+
+Go
+
+The language, not the game.
+
+32
+
+C
+
+That's ANSI C. C99 has 37 keywords, C11 has 44.
+
+33
+
+Python
+
+Python 2.7 has 31 keywords; Python 1.5 had 28.
+
+41
+
+Ruby
+
+Keywords may be used as identifiers (e.g., =class= is also a method name).
+
+49
+
+Java
+
+As in C, the names of the primitive types (=char=, =float=, etc.) are reserved.
+
+60
+
+JavaScript
+
+Includes all keywords from Java 1.0, many of which are [[http://mzl.la/1JIr8fM][unused]].
+
+65
+
+PHP
+
+[[http://php.net/manual/en/reserved.keywords.php][Since PHP 5.3]], seven keywords were introduced, including =goto=, =trait=, and =yield=.
+
+85
+
+C++
+
+According to [[http://en.cppreference.com/w/cpp/keyword][cppreference.com]], C++11 added 10 keywords to the existing 75.
+
+555
+
+COBOL
+
+I did not make this up. See this [[http://ibm.co/1JIr7bJ][IBM ILE COBOL manual]].
+
+∞
+
+Scheme
+
+Anyone can define new keywords.
+
+Python 3 added =nonlocal=, promoted =None=, =True=, and =False= to keyword status, and dropped =print= and =exec=. It's very uncommon for a language to drop keywords as it evolves. [[file:ch16.html#language_keywords_tbl][Table 16-1]] lists some languages, ordered by number of keywords.
+
+Scheme inherited from Lisp a macro facility that allows anyone to create special forms adding new control structures and evaluation rules to the language. The user-defined identifiers of those forms are called “syntactic keywords.” The Scheme R5RS standard states “There are no reserved identifiers” (page 45 of the [[http://bit.ly/1JIrB1w][standard]]), but a typical implementation such as [[http://bit.ly/1JIrAL1][MIT/GNU Scheme]] comes with 34 syntactic keywords predefined, such as =if=, =lambda=, and =define-syntax=---the keyword that lets you conjure new keywords.^{[[[#ftn.id590972][146]]]}
+
+Python is like Chess, and Scheme is like Go (the game).
+
+Now, back to Python syntax. I think Guido is too conservative with keywords. It's nice to have a small set of them, and adding new keywords potentially breaks a lot of code. But the use of =else= in loops reveals a recurring problem: the overloading of existing keywords when a new one would be a better choice. In the context of =for=, =while=, and =try=, a new =then= keyword would be preferable to abusing =else=.
+
+The most serious manifestation of this problem is the overloading of =def=: it's now used to define functions, generators, and coroutines---objects that are too different to share the same declaration syntax.^{[[[#ftn.id789741][147]]]}
+
+The introduction of =yield from= is particularly worrying. Once again, I believe Python users would be best served by a new keyword. Even worse, this starts a new trend: chaining existing keywords to create new syntax, instead of adding sensible, descriptive keywords. I fear one day we may be poring over the meaning of =raise from lambda=.
+
+*Breaking News*
+
+As I wrap up this book's technical review process, it seems Yury Selivanov's [[https://www.python.org/dev/peps/pep-0492/][PEP 492 --- Coroutines with async and await syntax]] is on the way to being accepted for implementation in Python 3.5 already! The PEP has the support of Guido van Rossum and Victor Stinner, respectively the author and a leading maintainer of the =asyncio= library that would be the main use case for the new syntax. In response to [[http://bit.ly/1JIrNgY][Selivanov's message]] to Python-ideas, Guido even [[http://bit.ly/1JIrPp9][hints at delaying the release]] of Python 3.5 so the PEP can be implemented.
+
+Of course, this would put to rest most of the complaints I expressed in the preceding sections.
+
+
+
+--------------
+
+
+^{[[[#id964915][129]]]} You'll only see this state in a multithreaded application---or if the generator object calls =getgeneratorstate= on itself, which is not useful.
+
+
+^{[[[#id425387][130]]]} This example is inspired by a snippet from Jacob Holm in the Python-ideas list, message titled [[http://bit.ly/1MMc9zy][“Yield-From: Finalization guarantees.”]] Some variations appear later in the thread, and Holm further explains his thinking in [[http://bit.ly/1MMcano][message 003912]].
+
+
+^{[[[#id418110][131]]]} There are several similar decorators published on the Web. This one is adapted from the ActiveState recipe [[http://bit.ly/1MMcuCx][Pipeline made of coroutines]] by Chaobin Tang, who in turn credits David Beazley.
+
+
+^{[[[#id581491][132]]]} There is an iPython extension called [[https://github.com/tecki/ipython-yf][ipython-yf]] that enables evaluating =yield from= directly in the iPython console. It's used to test asynchronous code and works with =asyncio=. It was submitted as a patch to Python 3.5 but was not accepted. See [[http://bugs.python.org/issue22412][Issue #22412: Towards an asyncio-enabled command line]] in the Python bug tracker.
+
+
+^{[[[#id613127][133]]]} As I write this, there is an open PEP proposing the addition of =await= and =async= keywords: [[https://www.python.org/dev/peps/pep-0492/][PEP 492 --- Coroutines with async and await syntax]].
+
+
+^{[[[#id496820][134]]]} [[file:ch16.html#yield_from_chain_ex2][Example 16-16]] is a didactic example only. The itertools module already provides an optimized chain function written in C.
+
+
+^{[[[#id608302][135]]]} The picture in [[file:ch16.html#yield_channel_fig][Figure 16-2]] was inspired by a [[http://flupy.org/resources/yield-from.pdf][diagram]] by Paul Sokolovsky.
+
+
+^{[[[#id392718][136]]]} Message to Python-Dev: [[http://bit.ly/1JIopTu][“PEP 380 (yield from a subgenerator) comments”]] (March 21, 2009).
+
+
+^{[[[#id423379][137]]]} In a message to Python-ideas on [[http://bit.ly/1JIoXJ1][April 5, 2009]], Nick Coghlan questioned whether the implicit priming done by =yield from= was a good idea.
+
+
+^{[[[#id1050523][138]]]} Opening sentence of the “Motivation” section in [[https://www.python.org/dev/peps/pep-0342/][PEP 342]].
+
+
+^{[[[#id1016333][139]]]} See the [[http://bit.ly/1HGs4Oz][official documentation for Simpy]]---not to be confused with the well-known but unrelated [[http://bit.ly/1HGs3Kl][SymPy]], a library for symbolic mathematics.
+
+
+^{[[[#id1020168][140]]]} I am not an expert in taxi fleet operations, so don't take my numbers seriously. Exponential distributions are commonly used in DES. You'll see some very short trips. Just pretend it's a rainy day and some passengers are taking cabs just to go around the block---in an ideal city where there are cabs when it rains.
+
+
+^{[[[#id1045449][141]]]} I was the passenger. I realized I forgot my wallet.
+
+
+^{[[[#id1005607][142]]]} The verb “drive” is commonly used to describe the operation of a coroutine: the client code drives the coroutine by sending it values. In [[file:ch16.html#demo_taxi_process][Example 16-21]], the client code is what you type in the console.
+
+
+^{[[[#id1017705][143]]]} This is typical of a discrete event simulation: the simulation clock is not incremented by a fixed amount on each loop, but advances according to the duration of each event completed.
+
+
+^{[[[#id1023587][144]]]} Message to thread [[http://bit.ly/1JIqjn6][“Yield-From: Finalization guarantees”]] in the Python-ideas mailing list. The David Beazley tutorial Guido refers to is [[http://www.dabeaz.com/coroutines/][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id912321][145]]]} Nowadays even tenured professors agree that Wikipedia is a good place to start studying pretty much any subject in computer science. Not true about other subjects, but for computer science, Wikipedia rocks.
+
+
+^{[[[#id590972][146]]]} [[http://lambda-the-ultimate.org/node/4295][“The Value Of Syntax?”]] is an interesting discussion about extensible syntax and programming language usability. The forum, [[http://lambda-the-ultimate.org/][Lambda the Ultimate]], is a watering hole for programming language geeks.
+
+
+^{[[[#id789741][147]]]} A highly recommended post related to this issue in the context of JavaScript, Python, and other languages is [[http://bit.ly/1JIrIdh][“What Color Is Your Function?”]] by Bob Nystrom.
+
+
+http://bit.ly/1HGs3Kl][SymPy]], a library for symbolic mathematics.
+
+
+^{[[[#id1020168][140]]]} I am not an expert in taxi fleet operations, so don't take my numbers seriously. Exponential distributions are commonly used in DES. You'll see some very short trips. Just pretend it's a rainy day and some passengers are taking cabs just to go around the block---in an ideal city where there are cabs when it rains.
+
+
+^{[[[#id1045449][141]]]} I was the passenger. I realized I forgot my wallet.
+
+
+^{[[[#id1005607][142]]]} The verb “drive” is commonly used to describe the operation of a coroutine: the client code drives the coroutine by sending it values. In [[file:ch16.html#demo_taxi_process][Example 16-21]], the client code is what you type in the console.
+
+
+^{[[[#id1017705][143]]]} This is typical of a discrete event simulation: the simulation clock is not incremented by a fixed amount on each loop, but advances according to the duration of each event completed.
+
+
+^{[[[#id1023587][144]]]} Message to thread [[http://bit.ly/1JIqjn6][“Yield-From: Finalization guarantees”]] in the Python-ideas mailing list. The David Beazley tutorial Guido refers to is [[http://www.dabeaz.com/coroutines/][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id912321][145]]]} Nowadays even tenured professors agree that Wikipedia is a good place to start studying pretty much any subject in computer science. Not true about other subjects, but for computer science, Wikipedia rocks.
+
+
+^{[[[#id590972][146]]]} [[http://lambda-the-ultimate.org/node/4295][“The Value Of Syntax?”]] is an interesting discussion about extensible syntax and programming language usability. The forum, [[http://lambda-the-ultimate.org/][Lambda the Ultimate]], is a watering hole for programming language geeks.
+
+
+^{[[[#id789741][147]]]} A highly recommended post related to this issue in the context of JavaScript, Python, and other languages is [[http://bit.ly/1JIrIdh][“What Color Is Your Function?”]] by Bob Nystrom.
+
+
+ontext of JavaScript, Python, and other languages is [[http://bit.ly/1JIrIdh][“What Color Is Your Function?”]] by Bob Nystrom.
+
+

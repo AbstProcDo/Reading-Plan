@@ -1,0 +1,455 @@
+* Chapter 15. Context Managers and else Blocks
+
+
+Having a =try/finally= (or a =with= block) around the =yield= is an unavoidable price of using =@contextmanager=, because you never know what the users of your context manager are going to do inside their =with= block.^{[[[#ftn.id783473][128]]]}
+
+An interesting real-life example of =@contextmanager= outside of the standard library is Martijn Pieters' [[http://bit.ly/1MM96aR][in-place file rewriting context manager]]. [[file:ch15.html#inplace_ex][Example 15-8]] shows how it's used.
+
+
+
+Example 15-8. A context manager for rewriting files in place
+
+#+BEGIN_EXAMPLE
+    import csv
+
+    with inplace(csvfilename, 'r', newline='') as (infh, outfh):
+        reader = csv.reader(infh)
+        writer = csv.writer(outfh)
+
+        for row in reader:
+            row += ['new', 'columns']
+            writer.writerow(row)
+#+END_EXAMPLE
+
+The =inplace= function is a context manager that gives you two handles---=infh= and =outfh= in the example---to the same file, allowing your code to read and write to it at the same time. It's easier to use than the standard library's [[http://bit.ly/1HGr6Sq][=fileinput.input= function]] (which also provides a context manager, by the way).
+
+If you want to study Martijn's =inplace= source code (listed in [[http://bit.ly/1MM96aR][the post]]), find the =yield= keyword: everything before it deals with setting up the context, which entails creating a backup file, then opening and yielding references to the readable and writable file handles that will be returned by the =__enter__= call. The =__exit__= processing after the =yield= closes the file handles and restores the file from the backup if something went wrong.
+
+Note that the use of =yield= in a generator used with the =@contextmanager= decorator has nothing to do with iteration. In the examples shown in this section, the generator function is operating more like a coroutine: a procedure that runs up to a point, then suspends to let the client code run until the client wants the coroutine to proceed with its job. [[file:ch16.html][Chapter 16]] is all about coroutines.
+
+ ** Chapter Summary
+
+
+This chapter started easily enough with discussion of =else= blocks in =for=, =while=, and =try= statements. Once you get used to the peculiar meaning of the =else= clause in these statements, I believe =else= can clarify your intentions.
+
+We then covered context managers and the meaning of the =with= statement, quickly moving beyond its common use to automatically close opened files. We implemented a custom context manager: the =LookingGlass= class with the =__enter__/__exit__= methods, and saw how to handle exceptions in the =__exit__= method. A key point that Raymond Hettinger made in his PyCon US 2013 keynote is that =with= is not just for resource management, but it's a tool for factoring out common setup and teardown code, or any pair of operations that need to be done before and after another procedure ([[http://bit.ly/1MM9pCm][slide 21, What Makes Python Awesome?]]).
+
+Finally, we reviewed functions in the =contextlib= standard library module. One of them, the =@contextmanager= decorator, makes it possible to implement a context manager using a simple generator with one =yield=---a leaner solution than coding a class with at least two methods. We reimplemented the =LookingGlass= as a =looking_glass= generator function, and discussed how to do exception handling when using =@contextmanager=.
+
+The =@contextmanager= decorator is an elegant and practical tool that brings together three distinctive Python features: a function decorator, a generator, and the =with= statement.
+** Further Reading
+
+
+[[http://bit.ly/1MMa1YB][Chapter 8, “Compound Statements,”]] in /The Python Language Reference/ says pretty much everything there is to say about =else= clauses in =if=, =for=, =while=, and =try= statements. Regarding Pythonic usage of =try/except=, with or without =else=, Raymond Hettinger has a brilliant answer to the question [[http://bit.ly/1MMa2Mp][“Is it a good practice to use try-except-else in Python?”]] in StackOverflow. Alex Martelli's /[[http://shop.oreilly.com/product/9780596100469.do][Python in a Nutshell, 2E]]/ (O'Reilly), has a chapter about exceptions with an excellent discussion of the EAFP style, crediting computing pioneer Grace Hopper for coining the phrase “It's easier to ask forgiveness than permission.”
+
+The /Python Standard Library/, Chapter 4, “Built-in Types,” has a section devoted to [[http://bit.ly/1MMacTS][Context Manager Types]]. The =__enter__/__exit__= special methods are also documented in /The Python Language Reference/ in [[http://bit.ly/1MMab2e][“3.3.8. With Statement Context Managers”]]. Context managers were introduced in [[https://www.python.org/dev/peps/pep-0343/][PEP 343 --- The “with” Statement]]. This PEP is not easy reading because it spends a lot of time covering corner cases and arguing against alternative proposals. That's the nature of PEPs.
+
+Raymond Hettinger highlighted the =with= statement as a “winning language feature” in his [[http://bit.ly/1MM9pCm][PyCon US 2013 keynote]]. He also showed some interesting applications of context managers in his talk [[http://bit.ly/1MMagmB][“Transforming Code into Beautiful, Idiomatic Python”]] at the same conference.
+
+Jeff Preshing' blog post [[http://bit.ly/1MMakmm][“The Python =with= Statement by Example”]] is interesting for the examples using context managers with the =pycairo= graphics library.
+
+Beazley and Jones devised context managers for very different purposes in their /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, 3E]]/ (O'Reilly). “Recipe 8.3. Making Objects Support the Context-Management Protocol” implements a =LazyConnection= class whose instances are context managers that open and close network connections automatically in =with= blocks. “Recipe 9.22. Defining Context Managers the Easy Way” introduces a context manager for timing code, and another for making transactional changes to a =list= object: within the =with= block, a working copy of the =list= instance is made, and all changes are applied to that working copy. Only when the =with= block completes without an exception, the working copy replaces the original list. Simple and ingenious.
+
+Soapbox
+
+*Factoring Out the Bread*
+
+In his PyCon US 2013 keynote, [[http://pyvideo.org/video/1669/keynote-3][“What Makes Python Awesome,”]] Raymond Hettinger says when he first saw the =with= statement proposal he thought it was “a little bit arcane.” Initially, I had a similar reaction. PEPs are often hard to read, and PEP 343 is typical in that regard.
+
+Then---Hettinger told us---he had an insight: subroutines are the most important invention in the history of computer languages. If you have sequences of operations like A;B;C and P;B;Q, you can factor out B in a subroutine. It's like factoring out the filling in a sandwich: using tuna with different breads. But what if you want to factor out the bread, to make sandwiches with wheat bread, using a different filling each time? That's what the =with= statement offers. It's the complement of the subroutine. Hettinger went on to say:
+
+#+BEGIN_QUOTE
+  The =with= statement is a very big deal. I encourage you to go out and take this tip of the iceberg and drill deeper. You can probably do profound things with the =with= statement. The best uses of it have not been discovered yet. I expect that if you make good use of it, it will be copied into other languages and all future languages will have it. You can be part of discovering something almost as profound as the invention of the subroutine itself.
+#+END_QUOTE
+
+Hettinger admits he is overselling the =with= statement. Nevertheless, it is a very useful feature. When he used the sandwich analogy to explain how =with= is the complement to the subroutine, many possibilities opened up in my mind.
+
+If you need to convince anyone that Python is awesome, you should watch Hettinger's keynote. The bit about context managers is from 23:00 to 26:15. But the entire keynote is excellent.
+
+
+
+--------------
+
+
+^{[[[#id572816][122]]]} PyCon US 2013 keynote: [[http://pyvideo.org/video/1669/keynote-3][“What Makes Python Awesome”]]; the part about =with= starts at 23:00 and ends at 26:15.
+
+
+^{[[[#id520410][123]]]} =with= blocks don't define a new scope, as functions and modules do.
+
+
+^{[[[#id473428][124]]]} The three arguments received by =self= are exactly what you get if you call [[http://bit.ly/1MM82Uc][=sys.exc_info()=]] in the =finally= block of a =try/finally= statement. This makes sense, considering that the =with= statement is meant to replace most uses of =try/finally=, and calling =sys.exc_info()= was often necessary to determine what clean-up action would be required.
+
+
+^{[[[#id460099][125]]]} The actual class is named =_GeneratorContextManager=. If you want to see exactly how it works, read its [[http://bit.ly/1MM8AJJ][source code]] in /Lib/contextlib.py/ in the Python 3.4 distribution.
+
+
+^{[[[#id793635][126]]]} The exception is sent into the generator using the =throw= method, covered in [[file:ch16.html#coro_termination_sec][Coroutine Termination and Exception Handling]].
+
+
+^{[[[#id793646][127]]]} This convention was adopted because when context managers were created, generators could not =return= values, only =yield=. They now can, as explained in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]]. As you'll see, returning a value from a generator does involve an exception.
+
+
+^{[[[#id783473][128]]]} This tip is quoted literally from a comment by Leonardo Rochael, one of the tech reviewers for this book. Nicely said, Leo!
+
+
+{[[[#id460099][125]]]} The actual class is named =_GeneratorContextManager=. If you want to see exactly how it works, read its [[http://bit.ly/1MM8AJJ][source code]] in /Lib/contextlib.py/ in the Python 3.4 distribution.
+
+
+^{[[[#id793635][126]]]} The exception is sent into the generator using the =throw= method, covered in [[file:ch16.html#coro_termination_sec][Coroutine Termination and Exception Handling]].
+
+
+^{[[[#id793646][127]]]} This convention was adopted because when context managers were created, generators could not =return= values, only =yield=. They now can, as explained in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]]. As you'll see, returning a value from a generator does involve an exception.
+
+
+^{[[[#id783473][128]]]} This tip is quoted literally from a comment by Leonardo Rochael, one of the tech reviewers for this book. Nicely said, Leo!
+
+
+ch reviewers for this book. Nicely said, Leo!
+
+
+hows the implementation of =LookingGlass=.
+
+
+
+Example 15-3. mirror.py: code for the LookingGlass context manager class
+
+#+BEGIN_EXAMPLE
+    class LookingGlass:
+
+        def __enter__(self):   
+            import sys
+            self.original_write = sys.stdout.write   
+            sys.stdout.write = self.reverse_write   
+            return 'JABBERWOCKY'   
+
+        def reverse_write(self, text):   
+            self.original_write(text[::-1])
+
+        def __exit__(self, exc_type, exc_value, traceback):   
+            import sys   
+            sys.stdout.write = self.original_write   
+            if exc_type is ZeroDivisionError:   
+                print('Please DO NOT divide by zero!')
+                return True   
+             
+#+END_EXAMPLE
+
+- [[#CO173-1][[[file:callouts/1.png]]]]  :: Python invokes =__enter__= with no arguments besides =self=.
+
+- [[#CO173-2][[[file:callouts/2.png]]]]  :: Hold the original =sys.stdout.write= method in an instance attribute for later use.
+
+- [[#CO173-3][[[file:callouts/3.png]]]]  :: Monkey-patch =sys.stdout.write=, replacing it with our own method.
+
+- [[#CO173-4][[[file:callouts/4.png]]]]  :: Return the ='JABBERWOCKY'= string just so we have something to put in the target variable =what=.
+
+- [[#CO173-5][[[file:callouts/5.png]]]]  :: Our replacement to =sys.stdout.write= reverses the =text= argument and calls the original implementation.
+
+- [[#CO173-6][[[file:callouts/6.png]]]]  :: Python calls =__exit__= with =None, None, None= if all went well; if an exception is raised, the three arguments get the exception data, as described next.
+
+- [[#CO173-7][[[file:callouts/7.png]]]]  :: It's cheap to import modules again because Python caches them.
+
+- [[#CO173-8][[[file:callouts/8.png]]]]  :: Restore the original method to =sys.stdout.write=.
+
+- [[#CO173-9][[[file:callouts/9.png]]]]  :: If the exception is not =None= and its type is =ZeroDivisionError=, print a message...
+
+- [[#CO173-10][[[file:callouts/10.png]]]]  :: ...and return =True= to tell the interpreter that the exception was handled.
+
+- [[#CO173-11][[[file:callouts/11.png]]]]  :: If =__exit__= returns =None= or anything but =True=, any exception raised in the =with= block will be propagated.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip
+    :CLASS: title
+    :END:
+
+When real applications take over standard output, they often want to replace =sys.stdout= with another file-like object for a while, then switch back to the original. The [[http://bit.ly/1MM7Sw6][=contextlib.redirect_stdout=]] context manager does exactly that: just pass it the file-like object that will stand in for =sys.stdout=.
+
+The interpreter calls the =__enter__= method with no arguments---beyond the implicit =self=. The three arguments passed to =__exit__= are:
+
+-  =exc_type=  :: The exception class (e.g., =ZeroDivisionError=).
+-  =exc_value=  :: The exception instance. Sometimes, parameters passed to the exception constructor---such as the error message---can be found in =exc_value.args=.
+-  =traceback=  :: A =traceback= object.^{[[[#ftn.id473428][124]]]}
+
+For a detailed look at how a context manager works, see [[file:ch15.html#looking_glass_demo_2][Example 15-4]], where =LookingGlass= is used outside of a =with= block, so we can manually call its =__enter__= and =__exit__= methods.
+
+
+
+Example 15-4. Exercising LookingGlass without a with block
+
+#+BEGIN_EXAMPLE
+        >>> from mirror import LookingGlass
+        >>> manager = LookingGlass()   
+        >>> manager
+        <mirror.LookingGlass object at 0x2a578ac>
+        >>> monster = manager.__enter__()   
+        >>> monster == 'JABBERWOCKY'   
+        eurT
+        >>> monster
+        'YKCOWREBBAJ'
+        >>> manager
+        >ca875a2x0 ta tcejbo ssalGgnikooL.rorrim<
+        >>> manager.__exit__(None, None, None)   
+        >>> monster
+        'JABBERWOCKY'
+#+END_EXAMPLE
+
+- [[#CO174-1][[[file:callouts/1.png]]]]  :: Instantiate and inspect the =manager= instance.
+
+- [[#CO174-2][[[file:callouts/2.png]]]]  :: Call the context manager =__enter__()= method and store result in =monster=.
+
+- [[#CO174-3][[[file:callouts/3.png]]]]  :: Monster is the string ='JABBERWOCKY'=. The =True= identifier appears reversed because all output via =stdout= goes through the =write= method we patched in =__enter__=.
+
+- [[#CO174-4][[[file:callouts/4.png]]]]  :: Call =manager.__exit__= to restore previous =stdout.write=.
+
+Context managers are a fairly novel feature and slowly but surely the Python community is finding new, creative uses for them. Some examples from the standard library are:
+
+- Managing transactions in the =sqlite3= module; see [[http://bit.ly/1MM89PC][“12.6.7.3. Using the connection as a context manager”]].
+- Holding locks, conditions, and semaphores in =threading= code; see [[http://bit.ly/1MM8guy][“17.1.10. Using locks, conditions, and semaphores in the =with= statement”]].
+- Setting up environments for arithmetic operations with =Decimal= objects; see the [[http://bit.ly/1MM8eTw][=decimal.localcontext= documentation]].
+- Applying temporary patches to objects for testing; see the [[http://bit.ly/1MM8imk][=unittest.mock.patch= function]].
+
+The standard library also includes the =contextlib= utilities, covered next.
+
+** The contextlib Utilities
+
+
+Before rolling your own context manager classes, take a look at [[http://bit.ly/1HGqZpJ][“29.6 =contextlib= --- Utilities for =with=-statement contexts”]] in /The Python Standard Library/. Besides the already mentioned =redirect_stdout=, the =contextlib= module includes classes and other functions that are more widely applicable:
+
+-  =closing=  :: A function to build context managers out of objects that provide a =close()= method but don't implement the =__enter__/__exit__= protocol.
+-  =suppress=  :: A context manager to temporarily ignore specified exceptions.
+-  =@contextmanager=  :: A decorator that lets you build a context manager from a simple generator function, instead of creating a class and implementing the protocol.
+-  =ContextDecorator=  :: A base class for defining class-based context managers that can also be used as function decorators, running the entire function within a managed context.
+-  =ExitStack=  :: A context manager that lets you enter a variable number of context managers. When the =with= block ends, =ExitStack= calls the stacked context managers' =__exit__= methods in LIFO order (last entered, first exited). Use this class when you don't know beforehand how many context managers you need to enter in your =with= block; for example, when opening all files from an arbitrary list of files at the same time.
+
+The most widely used of these utilities is surely the =@contextmanager= decorator, so it deserves more attention. That decorator is also intriguing because it shows a use for the =yield= statement unrelated to iteration. This paves the way to the concept of a coroutine, the theme of the next chapter.
+
+** Using @contextmanager
+
+
+The =@contextmanager= decorator reduces the boilerplate of creating a context manager: instead of writing a whole class with =__enter__/__exit__= methods, you just implement a generator with a single =yield= that should produce whatever you want the =__enter__= method to return.
+
+In a generator decorated with =@contextmanager=, =yield= is used to split the body of the function in two parts: everything before the =yield= will be executed at the beginning of the =while= block when the interpreter calls =__enter__=; the code after =yield= will run when =__exit__= is called at the end of the block.
+
+Here is an example. [[file:ch15.html#looking_glass_gen_ex][Example 15-5]] replaces the =LookingGlass= class from [[file:ch15.html#looking_glass_ex][Example 15-3]] with a generator function.
+
+
+
+Example 15-5. mirror_gen.py: a context manager implemented with a generator
+
+#+BEGIN_EXAMPLE
+    import contextlib
+
+
+    @contextlib.contextmanager   
+    def looking_glass():
+        import sys
+        original_write = sys.stdout.write   
+
+        def reverse_write(text):   
+            original_write(text[::-1])
+
+        sys.stdout.write = reverse_write   
+        yield 'JABBERWOCKY'   
+        sys.stdout.write = original_write   
+#+END_EXAMPLE
+
+- [[#CO175-1][[[file:callouts/1.png]]]]  :: Apply the =contextmanager= decorator.
+
+- [[#CO175-2][[[file:callouts/2.png]]]]  :: Preserve original =sys.stdout.write= method.
+
+- [[#CO175-3][[[file:callouts/3.png]]]]  :: Define custom =reverse_write= function; =original_write= will be available in the closure.
+
+- [[#CO175-4][[[file:callouts/4.png]]]]  :: Replace =sys.stdout.write= with =reverse_write=.
+
+- [[#CO175-5][[[file:callouts/5.png]]]]  :: Yield the value that will be bound to the target variable in the =as= clause of the =with= statement. This function pauses at this point while the body of the =with= executes.
+
+- [[#CO175-6][[[file:callouts/6.png]]]]  :: When control exits the =with= block in any way, execution continues after the =yield=; here the original =sys.stdout.write= is restored.
+
+[[file:ch15.html#looking_glass_gen_demo][Example 15-6]] shows the =looking_glass= function in operation.
+
+
+
+Example 15-6. Test driving the looking_glass context manager function
+
+#+BEGIN_EXAMPLE
+        >>> from mirror_gen import looking_glass
+        >>> with looking_glass() as what:   
+        ...      print('Alice, Kitty and Snowdrop')
+        ...      print(what)
+        ...
+        pordwonS dna yttiK ,ecilA
+        YKCOWREBBAJ
+        >>> what
+        'JABBERWOCKY'
+#+END_EXAMPLE
+
+- [[#CO176-1][[[file:callouts/1.png]]]]  :: The only difference from [[file:ch15.html#looking_glass_demo_1][Example 15-2]] is the name of the context manager: =looking_glass= instead of =LookingGlass=.
+
+Essentially the =contextlib.contextmanager= decorator wraps the function in a class that implements the =__enter__= and =__exit__= methods.^{[[[#ftn.id460099][125]]]}
+
+The =__enter__= method of that class:
+
+1. Invokes the generator function and holds on to the generator object---let's call it =gen=.
+2. Calls =next(gen)= to make it run to the =yield= keyword.
+3. Returns the value yielded by =next(gen)=, so it can be bound to a target variable in the with/as form.
+
+When the =with= block terminates, the =__exit__= method:
+
+1. Checks an exception was passed as =exc_type=; if so, =gen.throw(exception)= is invoked, causing the exception to be raised in the =yield= line inside the generator function body.
+2. Otherwise, =next(gen)= is called, resuming the execution of the generator function body after the =yield=.
+
+[[file:ch15.html#looking_glass_gen_ex][Example 15-5]] has a serious flaw: if an exception is raised in the body of the =with= block, the Python interpreter will catch it and raise it again in the =yield= expression inside =looking_glass=. But there is no error handling there, so the =looking_glass= function will abort without ever restoring the original =sys.stdout.write= method, leaving the system in an invalid state.
+
+[[file:ch15.html#looking_glass_gen_exc_ex][Example 15-7]] adds special handling of the =ZeroDivisionError= exception, making it functionally equivalent to the class-based [[file:ch15.html#looking_glass_ex][Example 15-3]].
+
+
+
+Example 15-7. mirror_gen_exc.py: generator-based context manager implementing exception handling---same external behavior as [[file:ch15.html#looking_glass_ex][Example 15-3]]
+
+#+BEGIN_EXAMPLE
+    import contextlib
+
+
+    @contextlib.contextmanager
+    def looking_glass():
+        import sys
+        original_write = sys.stdout.write
+
+        def reverse_write(text):
+            original_write(text[::-1])
+
+        sys.stdout.write = reverse_write
+        msg = ''   
+        try:
+            yield 'JABBERWOCKY'
+        except ZeroDivisionError:   
+            msg = 'Please DO NOT divide by zero!'
+        finally:
+            sys.stdout.write = original_write   
+            if msg:
+                print(msg)   
+#+END_EXAMPLE
+
+- [[#CO177-1][[[file:callouts/1.png]]]]  :: Create a variable for a possible error message; this is the first change in relation to [[file:ch15.html#looking_glass_gen_ex][Example 15-5]].
+
+- [[#CO177-2][[[file:callouts/2.png]]]]  :: Handle =ZeroDivisionError= by setting an error message.
+
+- [[#CO177-3][[[file:callouts/3.png]]]]  :: Undo monkey-patching of =sys.stdout.write=.
+
+- [[#CO177-4][[[file:callouts/4.png]]]]  :: Display error message, if it was set.
+
+Recall that the =__exit__= method tells the interpreter that it has handled the exception by returning =True=; in that case, the interpreter suppresses the exception. On the other hand, if =__exit__= does not explicitly return a value, the interpreter gets the usual =None=, and propagates the exception. With =@contextmanager=, the default behavior is inverted: the =__exit__= method provided by the decorator assumes any exception sent into the generator is handled and should be suppressed.^{[[[#ftn.id793635][126]]]} You must explicitly re-raise an exception in the decorated function if you don't want =@contextmanager= to suppress it.^{[[[#ftn.id793646][127]]]}
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-1
+    :CLASS: title
+    :END:
+
+Having a =try/finally= (or a =with= block) around the =yield= is an unavoidable price of using =@contextmanager=, because you never know what the users of your context manager are going to do inside their =with= block.^{[[[#ftn.id783473][128]]]}
+
+An interesting real-life example of =@contextmanager= outside of the standard library is Martijn Pieters' [[http://bit.ly/1MM96aR][in-place file rewriting context manager]]. [[file:ch15.html#inplace_ex][Example 15-8]] shows how it's used.
+
+
+
+Example 15-8. A context manager for rewriting files in place
+
+#+BEGIN_EXAMPLE
+    import csv
+
+    with inplace(csvfilename, 'r', newline='') as (infh, outfh):
+        reader = csv.reader(infh)
+        writer = csv.writer(outfh)
+
+        for row in reader:
+            row += ['new', 'columns']
+            writer.writerow(row)
+#+END_EXAMPLE
+
+The =inplace= function is a context manager that gives you two handles---=infh= and =outfh= in the example---to the same file, allowing your code to read and write to it at the same time. It's easier to use than the standard library's [[http://bit.ly/1HGr6Sq][=fileinput.input= function]] (which also provides a context manager, by the way).
+
+If you want to study Martijn's =inplace= source code (listed in [[http://bit.ly/1MM96aR][the post]]), find the =yield= keyword: everything before it deals with setting up the context, which entails creating a backup file, then opening and yielding references to the readable and writable file handles that will be returned by the =__enter__= call. The =__exit__= processing after the =yield= closes the file handles and restores the file from the backup if something went wrong.
+
+Note that the use of =yield= in a generator used with the =@contextmanager= decorator has nothing to do with iteration. In the examples shown in this section, the generator function is operating more like a coroutine: a procedure that runs up to a point, then suspends to let the client code run until the client wants the coroutine to proceed with its job. [[file:ch16.html][Chapter 16]] is all about coroutines.
+
+** Chapter Summary
+
+
+This chapter started easily enough with discussion of =else= blocks in =for=, =while=, and =try= statements. Once you get used to the peculiar meaning of the =else= clause in these statements, I believe =else= can clarify your intentions.
+
+We then covered context managers and the meaning of the =with= statement, quickly moving beyond its common use to automatically close opened files. We implemented a custom context manager: the =LookingGlass= class with the =__enter__/__exit__= methods, and saw how to handle exceptions in the =__exit__= method. A key point that Raymond Hettinger made in his PyCon US 2013 keynote is that =with= is not just for resource management, but it's a tool for factoring out common setup and teardown code, or any pair of operations that need to be done before and after another procedure ([[http://bit.ly/1MM9pCm][slide 21, What Makes Python Awesome?]]).
+
+Finally, we reviewed functions in the =contextlib= standard library module. One of them, the =@contextmanager= decorator, makes it possible to implement a context manager using a simple generator with one =yield=---a leaner solution than coding a class with at least two methods. We reimplemented the =LookingGlass= as a =looking_glass= generator function, and discussed how to do exception handling when using =@contextmanager=.
+
+The =@contextmanager= decorator is an elegant and practical tool that brings together three distinctive Python features: a function decorator, a generator, and the =with= statement.
+
+** Further Reading
+
+
+[[http://bit.ly/1MMa1YB][Chapter 8, “Compound Statements,”]] in /The Python Language Reference/ says pretty much everything there is to say about =else= clauses in =if=, =for=, =while=, and =try= statements. Regarding Pythonic usage of =try/except=, with or without =else=, Raymond Hettinger has a brilliant answer to the question [[http://bit.ly/1MMa2Mp][“Is it a good practice to use try-except-else in Python?”]] in StackOverflow. Alex Martelli's /[[http://shop.oreilly.com/product/9780596100469.do][Python in a Nutshell, 2E]]/ (O'Reilly), has a chapter about exceptions with an excellent discussion of the EAFP style, crediting computing pioneer Grace Hopper for coining the phrase “It's easier to ask forgiveness than permission.”
+
+The /Python Standard Library/, Chapter 4, “Built-in Types,” has a section devoted to [[http://bit.ly/1MMacTS][Context Manager Types]]. The =__enter__/__exit__= special methods are also documented in /The Python Language Reference/ in [[http://bit.ly/1MMab2e][“3.3.8. With Statement Context Managers”]]. Context managers were introduced in [[https://www.python.org/dev/peps/pep-0343/][PEP 343 --- The “with” Statement]]. This PEP is not easy reading because it spends a lot of time covering corner cases and arguing against alternative proposals. That's the nature of PEPs.
+
+Raymond Hettinger highlighted the =with= statement as a “winning language feature” in his [[http://bit.ly/1MM9pCm][PyCon US 2013 keynote]]. He also showed some interesting applications of context managers in his talk [[http://bit.ly/1MMagmB][“Transforming Code into Beautiful, Idiomatic Python”]] at the same conference.
+
+Jeff Preshing' blog post [[http://bit.ly/1MMakmm][“The Python =with= Statement by Example”]] is interesting for the examples using context managers with the =pycairo= graphics library.
+
+Beazley and Jones devised context managers for very different purposes in their /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, 3E]]/ (O'Reilly). “Recipe 8.3. Making Objects Support the Context-Management Protocol” implements a =LazyConnection= class whose instances are context managers that open and close network connections automatically in =with= blocks. “Recipe 9.22. Defining Context Managers the Easy Way” introduces a context manager for timing code, and another for making transactional changes to a =list= object: within the =with= block, a working copy of the =list= instance is made, and all changes are applied to that working copy. Only when the =with= block completes without an exception, the working copy replaces the original list. Simple and ingenious.
+
+Soapbox
+
+*Factoring Out the Bread*
+
+In his PyCon US 2013 keynote, [[http://pyvideo.org/video/1669/keynote-3][“What Makes Python Awesome,”]] Raymond Hettinger says when he first saw the =with= statement proposal he thought it was “a little bit arcane.” Initially, I had a similar reaction. PEPs are often hard to read, and PEP 343 is typical in that regard.
+
+Then---Hettinger told us---he had an insight: subroutines are the most important invention in the history of computer languages. If you have sequences of operations like A;B;C and P;B;Q, you can factor out B in a subroutine. It's like factoring out the filling in a sandwich: using tuna with different breads. But what if you want to factor out the bread, to make sandwiches with wheat bread, using a different filling each time? That's what the =with= statement offers. It's the complement of the subroutine. Hettinger went on to say:
+
+#+BEGIN_QUOTE
+  The =with= statement is a very big deal. I encourage you to go out and take this tip of the iceberg and drill deeper. You can probably do profound things with the =with= statement. The best uses of it have not been discovered yet. I expect that if you make good use of it, it will be copied into other languages and all future languages will have it. You can be part of discovering something almost as profound as the invention of the subroutine itself.
+#+END_QUOTE
+
+Hettinger admits he is overselling the =with= statement. Nevertheless, it is a very useful feature. When he used the sandwich analogy to explain how =with= is the complement to the subroutine, many possibilities opened up in my mind.
+
+If you need to convince anyone that Python is awesome, you should watch Hettinger's keynote. The bit about context managers is from 23:00 to 26:15. But the entire keynote is excellent.
+
+
+
+--------------
+
+
+^{[[[#id572816][122]]]} PyCon US 2013 keynote: [[http://pyvideo.org/video/1669/keynote-3][“What Makes Python Awesome”]]; the part about =with= starts at 23:00 and ends at 26:15.
+
+
+^{[[[#id520410][123]]]} =with= blocks don't define a new scope, as functions and modules do.
+
+
+^{[[[#id473428][124]]]} The three arguments received by =self= are exactly what you get if you call [[http://bit.ly/1MM82Uc][=sys.exc_info()=]] in the =finally= block of a =try/finally= statement. This makes sense, considering that the =with= statement is meant to replace most uses of =try/finally=, and calling =sys.exc_info()= was often necessary to determine what clean-up action would be required.
+
+
+^{[[[#id460099][125]]]} The actual class is named =_GeneratorContextManager=. If you want to see exactly how it works, read its [[http://bit.ly/1MM8AJJ][source code]] in /Lib/contextlib.py/ in the Python 3.4 distribution.
+
+
+^{[[[#id793635][126]]]} The exception is sent into the generator using the =throw= method, covered in [[file:ch16.html#coro_termination_sec][Coroutine Termination and Exception Handling]].
+
+
+^{[[[#id793646][127]]]} This convention was adopted because when context managers were created, generators could not =return= values, only =yield=. They now can, as explained in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]]. As you'll see, returning a value from a generator does involve an exception.
+
+
+^{[[[#id783473][128]]]} This tip is quoted literally from a comment by Leonardo Rochael, one of the tech reviewers for this book. Nicely said, Leo!
+
+
+{[[[#id460099][125]]]} The actual class is named =_GeneratorContextManager=. If you want to see exactly how it works, read its [[http://bit.ly/1MM8AJJ][source code]] in /Lib/contextlib.py/ in the Python 3.4 distribution.
+
+
+^{[[[#id793635][126]]]} The exception is sent into the generator using the =throw= method, covered in [[file:ch16.html#coro_termination_sec][Coroutine Termination and Exception Handling]].
+
+
+^{[[[#id793646][127]]]} This convention was adopted because when context managers were created, generators could not =return= values, only =yield=. They now can, as explained in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]]. As you'll see, returning a value from a generator does involve an exception.
+
+
+^{[[[#id783473][128]]]} This tip is quoted literally from a comment by Leonardo Rochael, one of the tech reviewers for this book. Nicely said, Leo!
+
+
+ch reviewers for this book. Nicely said, Leo!
+
+

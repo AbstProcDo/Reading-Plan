@@ -1,0 +1,1100 @@
+** Chapter 13. Operator Overloading: Doing It Right
+
+
+In general, if a forward infix operator method (e.g., =__mul__=) is designed to work only with operands of the same type as =self=, it's useless to implement the corresponding reverse method (e.g., =__rmul__=) because that, by definition, will only be invoked when dealing with an operand of a different type.
+
+This concludes our exploration of operator overloading in Python.
+
+** Chapter Summary
+
+
+We started this chapter by reviewing some restrictions Python imposes on operator overloading: no overloading of operators in built-in types, and overloading limited to existing operators, except for a few ones (=is=, =and=, =or=, =not=).
+
+We got down to business with the unary operators, implementing =__neg__= and =__pos__=. Next came the infix operators, starting with =+=, supported by the =__add__= method. We saw that unary and infix operators are supposed to produce results by creating new objects, and should never change their operands. To support operations with other types, we return the =NotImplemented= special value---not an exception---allowing the interpreter to try again by swapping the operands and calling the reverse special method for that operator (e.g., =__radd__=). The algorithm Python uses to handle infix operators is summarized in the flowchart in [[file:ch13.html#operator_flowchart][Figure 13-1]].
+
+Mixing operand types means we need to detect when we get an operand we can't handle. In this chapter, we did this in two ways: in the duck typing way, we just went ahead and tried the operation, catching a =TypeError= exception if it happened; later, in =__mul__=, we did it with an explicit =isinstance= test. There are pros and cons to these approaches: duck typing is more flexible, but explicit type checking is more predictable. When we did use =isinstance=, we were careful to avoid testing with a concrete class, but used the =numbers.Real= ABC: =isinstance(scalar, numbers.Real)=. This is a good compromise between flexibility and safety, because existing or future user-defined types can be declared as actual or virtual subclasses of an ABC, as we saw in [[file:ch11.html][Chapter 11]].
+
+The next topic we covered was the rich comparison operators. We implemented ==== with =__eq__= and discovered that Python provides a handy implementation of =!== in the =__ne__= inherited from the =object= base class. The way Python evaluates these operators along with =>=, =<=, =>==, and =<== is slightly different, with a different logic for choosing the reverse method, and special fallback handling for ==== and =!==, which never generate errors because Python compares the object IDs as a last resort.
+
+In the last section, we focused on augmented assignment operators. We saw that Python handles them by default as a combination of plain operator followed by assignment, that is: =a += b= is evaluated exactly as =a = a + b=. That always creates a new object, so it works for mutable or immutable types. For mutable objects, we can implement in-place special methods such as =__iadd__= for =+==, and alter the value of the lefthand operand. To show this at work, we left behind the immutable =Vector= class and worked on implementing a =BingoCage= subclass to support =+== for adding items to the random pool, similar to the way the =list= built-in supports =+== as a shortcut for the =list.extend()= method. While doing this, we discussed how =+= tends to be stricter than =+== regarding the types it accepts. For sequence types, =+= usually requires that both operands are of the same type, while =+== often accepts any iterable as the righthand operand.
+
+** Further Reading
+
+
+Operator overloading is one area of Python programming where =isinstance= tests are common. In general, libraries should leverage dynamic typing---to be more flexible---by avoiding explicit type tests and just trying operations and then handling the exceptions, opening the door for working with objects regardless of their types, as long as they support the necessary operations. But Python ABCs allow a stricter form of duck typing, dubbed “goose typing” by Alex Martelli, which is often useful when writing code that overloads operators. So, if you skipped [[file:ch11.html][Chapter 11]], make sure to read it.
+
+The main reference for the operator special methods is the [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]]. It's the canonical source, but at this time it's plagued by that glaring bug mentioned in [[file:ch13.html#ne_doc_bug_warning][Python 3 Documentation Bug]], advising “when defining =__eq__()=, one should also define =__ne__()=.” In reality, the =__ne__= inherited from the =object= class in Python 3 covers the vast majority of needs, so implementing =__ne__= is rarely necessary in practice. Another relevant reading in the Python documentation is [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module of The Python Standard Library.
+
+A related technique is generic functions, supported by the =@singledispatch= decorator in Python 3 ([[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]]). In /Python Cookbook/, 3E (O'Reilly), by David Beazley and Brian K. Jones, “Recipe 9.20. Implementing Multiple Dispatch with Function Annotations” uses some advanced metaprogramming---involving a metaclass---to implement type-based dispatching with function annotations. The second edition of the /Python Cookbook/ by Martelli, Ravenscroft, and Ascher has an interesting recipe (2.13, by Erik Max Francis) showing how to overload the =<<= operator to emulate the C++ =iostream= syntax in Python. Both books have other examples with operator overloading, I just picked two notable recipes.
+
+The =functools.total_ordering= function is a class decorator (supported in Python 2.7 and later) that automatically generates methods for all rich comparison operators in any class that defines at least a couple of them. See the [[http://bit.ly/1C12IWF][functools module docs]].
+
+If you are curious about operator method dispatching in languages with dynamic typing, two seminal readings are [[http://bit.ly/1FVhejw][“A Simple Technique for Handling Multiple Polymorphism”]] by Dan Ingalls (member of the original Smalltalk team) and [[http://bit.ly/1QrnuuD][“Arithmetic and Double Dispatching in Smalltalk-80”]] by Kurt J. Hebel and Ralph Johnson (Johnson became famous as one of the authors of the original /Design Patterns/ book). Both papers provide deep insight into the power of polymorphism in languages with dynamic typing, like Smalltalk, Python, and Ruby. Python does not use double dispatching for handling operators as described in those articles. The Python algorithm using forward and reverse operators is easier for user-defined classes to support than double dispatching, but requires special handling by the interpreter. In contrast, classic double dispatching is a general technique you can use in Python or any OO language beyond the specific context of infix operators, and in fact Ingalls, Hebel, and Johnson use very different examples to describe it.
+
+The article [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]] from which I quoted the epigraph in this chapter, and two other snippets in [[file:ch13.html#operator_soapbox][Soapbox]], appeared in /Java Report/, 5(7), July 2000 and /C++ Report/, 12(7), July/August 2000. It's an awesome reading if you are into programming language design.
+
+
+
+Soapbox
+
+*Operator Overloading: Pros and Cons*
+
+James Gosling, quoted at the start of this chapter, made the conscious decision to leave operator overloading out when he designed Java. In that same interview ([[http://bit.ly/1C12T4t][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]]) he says:
+
+#+BEGIN_QUOTE
+  Probably about 20 to 30 percent of the population think of operator overloading as the spawn of the devil; somebody has done something with operator overloading that has just really ticked them off, because they've used like + for list insertion and it makes life really, really confusing. A lot of that problem stems from the fact that there are only about half a dozen operators you can sensibly overload, and yet there are thousands or millions of operators that people would like to define---so you have to pick, and often the choices conflict with your sense of intuition.
+#+END_QUOTE
+
+Guido van Rossum picked the middle way in supporting operator overloading: he did not leave the door open for users creating new arbitrary operators like =<=>= or =:-)=, which prevents a Tower of Babel of custom operators, and allows the Python parser to be simple. Python also does not let you overload the operators of the built-in types, another limitation that promotes readability and predictable performance.
+
+Gosling goes on to say:
+
+#+BEGIN_QUOTE
+  Then there's a community of about 10 percent that have actually used operator overloading appropriately and who really care about it, and for whom it's actually really important; this is almost exclusively people who do numerical work, where the notation is very important to appealing to people's intuition, because they come into it with an intuition about what the + means, and the ability to say “a + b” where a and b are complex numbers or matrices or something really does make sense.
+#+END_QUOTE
+
+The notation side of the issue cannot be underestimated. Here is an illustrative example from the realm of finances. In Python, you can compute compound interest using a formula written like this:
+
+#+BEGIN_EXAMPLE
+    interest = principal * ((1 + rate) ** periods - 1)
+#+END_EXAMPLE
+
+That same notation works regardless of the numeric types involved. Thus, if you are doing serious financial work, you can make sure that =periods= is an =int=, while =rate=, =interest=, and =principal= are exact numbers---instances of the Python =decimal.Decimal= class --- and that formula will work exactly as written.
+
+But in Java, if you switch from =float= to =BigDecimal= to get arbitrary precision, you can't use infix operators anymore, because they only work with the primitive types. This is the same formula coded to work with =BigDecimal= numbers in Java:
+
+#+BEGIN_EXAMPLE
+    BigDecimal interest = principal.multiply(BigDecimal.ONE.add(rate)
+                            .pow(periods).subtract(BigDecimal.ONE));
+#+END_EXAMPLE
+
+It's clear that infix operators make formulas more readable, at least for most of us.^{[[[#ftn.id958483][103]]]} And operator overloading is necessary to support nonprimitive types with infix operator notation. Having operator overloading in a high-level, easy-to-use language was probably a key reason for the amazing penetration of Python in scientific computing in recent years.
+
+Of course, there are benefits to disallowing operator overloading in a language. It is arguably a sound decision for lower-level systems languages where performance and safety are paramount. The much newer Go language followed the lead of Java in this regard and does not support operator overloading.
+
+But overloaded operators, when used sensibly, do make code easier to read and write. It's a great feature to have in a modern high-level language.
+
+*A Glimpse at Lazy Evaluation*
+
+If you look closely at the traceback in [[file:ch13.html#ex_vector_error_iter_not_add][Example 13-9]], you'll see evidence of the /lazy/ evaluation of generator expressions. [[file:ch13.html#ex_vector_error_iter_not_add_repeat][Example 13-19]] is that same traceback, now with callouts.
+
+
+
+Example 13-19. Same as [[file:ch13.html#ex_vector_error_iter_not_add][Example 13-9]]
+
+#+BEGIN_EXAMPLE
+    >>> v1 + 'ABC'
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "vector_v6.py", line 329, in __add__
+        return Vector(a + b for a, b in pairs)  # 
+      File "vector_v6.py", line 243, in __init__
+        self._components = array(self.typecode, components)  # 
+      File "vector_v6.py", line 329, in <genexpr>
+        return Vector(a + b for a, b in pairs)  # 
+    TypeError: unsupported operand type(s) for +: 'float' and 'str'
+#+END_EXAMPLE
+
+- [[#CO152-1][[[file:callouts/1.png]]]]  :: The =Vector= call gets a generator expression as its =components= argument. No problem at this stage.
+
+- [[#CO152-2][[[file:callouts/2.png]]]]  :: The =components= genexp is passed to the =array= constructor. Within the =array= constructor, Python tries to iterate over the genexp, causing the evaluation of the first item =a + b=. That's when the =TypeError= occurs.
+
+- [[#CO152-3][[[file:callouts/3.png]]]]  :: The exception propagates to the =Vector= constructor call, where it is reported.
+
+This shows how the generator expression is evaluated at the latest possible moment, and not where it is defined in the source code.
+
+In contrast, if the =Vector= constructor was invoked as =Vector([a + b for a, b in pairs])=, then the exception would happen right there, because the list comprehension tried to build a =list= to be passed as the argument to the =Vector()= call. The body of =Vector.__init__= would not be reached at all.
+
+[[file:ch14.html][Chapter 14]] will cover generator expressions in detail, but I did not want to let this accidental demonstration of their lazy nature go unnoticed.
+
+
+
+--------------
+
+
+^{[[[#id973194][98]]]} Source: [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]].
+
+
+^{[[[#id984216][99]]]} The Python documentation uses both terms. The [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]] uses “reflected,” but [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module docs mention “forward” and “reverse” methods, and I find this terminology better, because “forward” and “reversed” clearly name each of the directions, while “reflected” doesn't have an obvious opposite.
+
+
+^{[[[#id561864][100]]]} The =@= sign can be used as an infix dot product operator starting with Python 3.5. More about it in [[file:ch13.html#matmul_operator_sec][The New @ Infix Operator in Python 3.5]].
+
+
+^{[[[#id702066][101]]]} The logic for =object.__eq__= and =object.__ne__= is in function =object_richcompare= in [[http://bit.ly/1C11uL7][Objects/typeobject.c]] in the CPython source code.
+
+
+^{[[[#id1005952][102]]]} The =iter= built-in function will be covered in the next chapter. Here I could have used =tuple(other)=, and it would work, but at the cost of building a new =tuple= when all the =.load(…)= method needs is to iterate over its argument.
+
+
+^{[[[#id958483][103]]]} My friend Mario Domenech Goulart, a core developer of the [[http://www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+
+[[#id973194][98]]]} Source: [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]].
+
+
+^{[[[#id984216][99]]]} The Python documentation uses both terms. The [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]] uses “reflected,” but [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module docs mention “forward” and “reverse” methods, and I find this terminology better, because “forward” and “reversed” clearly name each of the directions, while “reflected” doesn't have an obvious opposite.
+
+
+^{[[[#id561864][100]]]} The =@= sign can be used as an infix dot product operator starting with Python 3.5. More about it in [[file:ch13.html#matmul_operator_sec][The New @ Infix Operator in Python 3.5]].
+
+
+^{[[[#id702066][101]]]} The logic for =object.__eq__= and =object.__ne__= is in function =object_richcompare= in [[http://bit.ly/1C11uL7][Objects/typeobject.c]] in the CPython source code.
+
+
+^{[[[#id1005952][102]]]} The =iter= built-in function will be covered in the next chapter. Here I could have used =tuple(other)=, and it would work, but at the cost of building a new =tuple= when all the =.load(…)= method needs is to iterate over its argument.
+
+
+^{[[[#id958483][103]]]} My friend Mario Domenech Goulart, a core developer of the [[http://www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+
+www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+
+concatenating sequences in Python.
+
+The methods in [[file:ch13.html#ex_vector_add_t1][Example 13-4]] work with =Vector= objects, or any iterable with numeric items, such as a =Vector2d=, a =tuple= of integers, or an =array= of floats. But if provided with a noniterable object, =__add__= fails with a message that is not very helpful, as in [[file:ch13.html#ex_vector_error_iter][Example 13-8]].
+
+
+
+Example 13-8. Vector.__add__ method needs an iterable operand
+
+#+BEGIN_EXAMPLE
+    >>> v1 + 1
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "vector_v6.py", line 328, in __add__
+        pairs = itertools.zip_longest(self, other, fillvalue=0.0)
+    TypeError: zip_longest argument #2 must support iteration
+#+END_EXAMPLE
+
+Another unhelpful message is given if an operand is iterable but its items cannot be added to the =float= items in the =Vector=. See [[file:ch13.html#ex_vector_error_iter_not_add][Example 13-9]].
+
+
+
+Example 13-9. Vector.__add__ method needs an iterable with numeric items
+
+#+BEGIN_EXAMPLE
+    >>> v1 + 'ABC'
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "vector_v6.py", line 329, in __add__
+        return Vector(a + b for a, b in pairs)
+      File "vector_v6.py", line 243, in __init__
+        self._components = array(self.typecode, components)
+      File "vector_v6.py", line 329, in <genexpr>
+        return Vector(a + b for a, b in pairs)
+    TypeError: unsupported operand type(s) for +: 'float' and 'str'
+#+END_EXAMPLE
+
+The problems in Examples [[file:ch13.html#ex_vector_error_iter][13-8]] and [[file:ch13.html#ex_vector_error_iter_not_add][13-9]] actually go deeper than obscure error messages: if an operator special method cannot return a valid result because of type incompatibility, it should return =NotImplemented= and not raise =TypeError=. By returning =NotImplemented=, you leave the door open for the implementer of the other operand type to perform the operation when Python tries the reversed method call.
+
+In the spirit of duck typing, we will refrain from testing the type of the =other= operand, or the type of its elements. We'll catch the exceptions and return =NotImplemented=. If the interpreter has not yet reversed the operands, it will try that. If the reverse method call returns =NotImplemented=, then Python will raise issue =TypeError= with a standard error message like “unsupported operand type(s) for +: /Vector/ and /str/.”
+
+The final implementation of the special methods for =Vector= addition are in [[file:ch13.html#ex_vector_v6][Example 13-10]].
+
+
+
+Example 13-10. vector_v6.py: operator + methods added to vector_v5.py ([[file:ch10.html#ex_vector_v5][Example 10-16]])
+
+#+BEGIN_EXAMPLE
+        def __add__(self, other):
+            try:
+                pairs = itertools.zip_longest(self, other, fillvalue=0.0)
+                return Vector(a + b for a, b in pairs)
+            except TypeError:
+                return NotImplemented
+
+        def __radd__(self, other):
+            return self + other
+#+END_EXAMPLE
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-2
+    :CLASS: title
+    :END:
+
+If an infix operator method raises an exception, it aborts the operator dispatch algorithm. In the particular case of =TypeError=, it is often better to catch it and =return NotImplemented=. This allows the interpreter to try calling the reversed operator method, which may correctly handle the computation with the swapped operands, if they are of different types.
+
+At this point, we have safely overloaded the =+= operator by writing =__add__= and =__radd__=. We will now tackle another infix operator: =*=.
+
+** Overloading * for Scalar Multiplication
+
+
+What does =Vector([1, 2, 3]) * x= mean? If =x= is a number, that would be a scalar product, and the result would be a new =Vector= with each component multiplied by =x=---also known as an elementwise multiplication:
+
+#+BEGIN_EXAMPLE
+    >>> v1 = Vector([1, 2, 3])
+    >>> v1 * 10
+    Vector([10.0, 20.0, 30.0])
+    >>> 11 * v1
+    Vector([11.0, 22.0, 33.0])
+#+END_EXAMPLE
+
+Another kind of product involving =Vector= operands would be the dot product of two vectors---or matrix multiplication, if you take one vector as a 1 × N matrix and the other as an N × 1 matrix. The current practice in NumPy and similar libraries is not to overload the =*= with these two meanings, but to use =*= only for the scalar product. For example, in NumPy, =numpy.dot()= computes the dot product.^{[[[#ftn.id561864][100]]]}
+
+Back to our scalar product, again we start with the simplest =__mul__= and =__rmul__= methods that could possibly work:
+
+#+BEGIN_EXAMPLE
+        # inside the Vector class
+
+        def __mul__(self, scalar):
+            return Vector(n * scalar for n in self)
+
+        def __rmul__(self, scalar):
+            return self * scalar
+#+END_EXAMPLE
+
+Those methods do work, except when provided with incompatible operands. The =scalar= argument has to be a number that when multiplied by a =float= produces another =float= (because our =Vector= class uses an =array= of floats internally). So a =complex= number will not do, but the scalar can be an =int=, a =bool= (because =bool= is a subclass of =int=), or even a =fractions.Fraction= instance.
+
+We could use the same duck typing technique as we did in [[file:ch13.html#ex_vector_v6][Example 13-10]] and catch a =TypeError= in =__mul__=, but there is another, more explicit way that makes sense in this situation: /goose typing/. We use =isinstance()= to check the type of =scalar=, but instead of hardcoding some concrete types, we check against the =numbers.Real= ABC, which covers all the types we need, and keeps our implementation open to future numeric types that declare themselves actual or /virtual subclasses/ of the =numbers.Real= ABC. [[file:ch13.html#ex_vector_v7][Example 13-11]] shows a practical use of goose typing---an explicit check against an abstract type; see [[https://github.com/fluentpython/example-code][the_ Fluent Python_ code repository]] for the full listing.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-3
+    :CLASS: title
+    :END:
+
+As you may recall from [[file:ch11.html#abc_in_stdlib_sec][ABCs in the Standard Library]], =decimal.Decimal= is not registered as a virtual subclass of =numbers.Real=. Thus, our =Vector= class will not handle =decimal.Decimal= numbers.
+
+
+
+Example 13-11. vector_v7.py: operator * methods added
+
+#+BEGIN_EXAMPLE
+    from array import array
+    import reprlib
+    import math
+    import functools
+    import operator
+    import itertools
+    import numbers  # 
+
+    class Vector:
+        typecode = 'd'
+
+        def __init__(self, components):
+            self._components = array(self.typecode, components)
+
+        # many methods omitted in book listing, see vector_v7.py
+        # in https://github.com/fluentpython/example-code ...
+
+        def __mul__(self, scalar):
+            if isinstance(scalar, numbers.Real):  # 
+                return Vector(n * scalar for n in self)
+            else:  # 
+                return NotImplemented
+
+        def __rmul__(self, scalar):
+            return self * scalar  # 
+#+END_EXAMPLE
+
+- [[#CO144-1][[[file:callouts/1.png]]]]  :: Import the =numbers= module for type checking.
+
+- [[#CO144-2][[[file:callouts/2.png]]]]  :: If =scalar= is an instance of a =numbers.Real= subclass, create new =Vector= with multiplied component values.
+
+- [[#CO144-3][[[file:callouts/3.png]]]]  :: Otherwise, raise =TypeError= with an explicit message.
+
+- [[#CO144-4][[[file:callouts/4.png]]]]  :: In this example, =__rmul__= works fine by just performing =self * scalar=, delegating to the =__mul__= method.
+
+With [[file:ch13.html#ex_vector_v7][Example 13-11]], we can multiply =Vectors= by scalar values of the usual and not so usual numeric types:
+
+#+BEGIN_EXAMPLE
+    >>> v1 = Vector([1.0, 2.0, 3.0])
+    >>> 14 * v1
+    Vector([14.0, 28.0, 42.0])
+    >>> v1 * True
+    Vector([1.0, 2.0, 3.0])
+    >>> from fractions import Fraction
+    >>> v1 * Fraction(1, 3)
+    Vector([0.3333333333333333, 0.6666666666666666, 1.0])
+#+END_EXAMPLE
+
+Implementing =+= and =*= we saw the most common patterns for coding infix operators. The techniques we described for =+= and =*= are applicable to all operators listed in [[file:ch13.html#infix_operator_names_tbl][Table 13-1]] (the in-place operators will be covered in [[file:ch13.html#augmented_assign_ops][Augmented Assignment Operators]]).
+
+
+
+Table 13-1. Infix operator method names (the in-place operators are used for augmented assignment; comparison operators are in [[file:ch13.html#reversed_rich_comp_op_tbl][Table 13-2]])
+
+Operator
+
+Forward
+
+Reverse
+
+In-place
+
+Description
+
+=+=
+
+=__add__=
+
+=__radd__=
+
+=__iadd__=
+
+Addition or concatenation
+
+=-=
+
+=__sub__=
+
+=__rsub__=
+
+=__isub__=
+
+Subtraction
+
+=*=
+
+=__mul__=
+
+=__rmul__=
+
+=__imul__=
+
+Multiplication or repetition
+
+=/=
+
+=__truediv__=
+
+=__rtruediv__=
+
+=__itruediv__=
+
+True division
+
+=//=
+
+=__floordiv__=
+
+=__rfloordiv__=
+
+=__ifloordiv__=
+
+Floor division
+
+=%=
+
+=__mod__=
+
+=__rmod__=
+
+=__imod__=
+
+Modulo
+
+=divmod()=
+
+=__divmod__=
+
+=__rdivmod__=
+
+=__idivmod__=
+
+Returns tuple of floor division quotient and modulo
+
+=**=, =pow()=
+
+=__pow__=
+
+=__rpow__=
+
+=__ipow__=
+
+Exponentiation^{[[[#ftn.id482954][a]]]}
+
+=@=
+
+=__matmul__=
+
+=__rmatmul__=
+
+=__imatmul__=
+
+Matrix multiplication^{[[[#ftn.id1086235][b]]]}
+
+=&=
+
+=__and__=
+
+=__rand__=
+
+=__iand__=
+
+Bitwise and
+
+|
+
+=__or__=
+
+=__ror__=
+
+=__ior__=
+
+Bitwise or
+
+=^=
+
+=__xor__=
+
+=__rxor__=
+
+=__ixor__=
+
+Bitwise xor
+
+=<<=
+
+=__lshift__=
+
+=__rlshift__=
+
+=__ilshift__=
+
+Bitwise shift left
+
+=>>=
+
+=__rshift__=
+
+=__rrshift__=
+
+=__irshift__=
+
+Bitwise shift right
+
+
+^{[[[#id482954][a]]]} =pow= takes an optional third argument, =modulo=: =pow(a, b, modulo)=, also supported by the special methods when invoked directly (e.g., =a.__pow__(b, modulo)=).
+
+
+^{[[[#id1086235][b]]]} New in Python 3.5.
+
+The rich comparison operators are another category of infix operators, using a slightly different set of rules. We cover them in the next main section: [[file:ch13.html#rich_comp_op_sec][Rich Comparison Operators]].
+
+The following optional sidebar is about the =@= operator introduced in Python 3.5---not yet released at the time of this writing.
+
+
+
+The New @ Infix Operator in Python 3.5
+
+Python 3.4 does not have an infix operator for the dot product. However, as I write this, Python 3.5 pre-alpha already implements [[https://www.python.org/dev/peps/pep-0465/][PEP 465 --- A dedicated infix operator for matrix multiplication]], making the =@= sign available for that purpose (e.g., =a @ b= is the dot product of =a= and =b=). The =@= operator is supported by the special methods =__matmul__=, =__rmatmul__=, and =__imatmul__=, named for “matrix multiplication.” These methods are not used anywhere in the standard library at this time, but are recognized by the interpreter in Python 3.5 so the NumPy team---and the rest of us---can support the =@= operator in user-defined types. The parser was also changed to handle the infix =@= (=a @ b= is a syntax error in Python 3.4).
+
+Just for fun, after compiling Python 3.5 from source, I was able to implement and test the =@= operator for the =Vector= dot product.
+
+These are the simple tests I did:
+
+#+BEGIN_EXAMPLE
+    >>> va = Vector([1, 2, 3])
+    >>> vz = Vector([5, 6, 7])
+    >>> va @ vz == 38.0  # 1*5 + 2*6 + 3*7
+    True
+    >>> [10, 20, 30] @ vz
+    380.0
+    >>> va @ 3
+    Traceback (most recent call last):
+      ...
+    TypeError: unsupported operand type(s) for @: 'Vector' and 'int'
+#+END_EXAMPLE
+
+And here is the code of the relevant special methods:
+
+#+BEGIN_EXAMPLE
+    class Vector:
+        # many methods omitted in book listing
+
+        def __matmul__(self, other):
+            try:
+                return sum(a * b for a, b in zip(self, other))
+            except TypeError:
+                return NotImplemented
+
+        def __rmatmul__(self, other):
+            return self @ other
+#+END_EXAMPLE
+
+The full source is in the /vector_py3_5.py/ file in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]].
+
+Remember to try it with Python 3.5, otherwise you'll get a =SyntaxError=!
+
+** Rich Comparison Operators
+
+
+The handling of the rich comparison operators ====, =!==, =>=, =<=, =>==, =<== by the Python interpreter is similar to what we just saw, but differs in two important aspects:
+
+- The same set of methods are used in forward and reverse operator calls. The rules are summarized in [[file:ch13.html#reversed_rich_comp_op_tbl][Table 13-2]]. For example, in the case of ====, both the forward and reverse calls invoke =__eq__=, only swapping arguments; and a forward call to =__gt__= is followed by a reverse call to =__lt__= with the swapped arguments.
+- In the case of ==== and =!==, if the reverse call fails, Python compares the object IDs instead of raising =TypeError=.
+
+
+
+Table 13-2. Rich comparison operators: reverse methods invoked when the initial method call returns NotImplemented
+
+Group
+
+Infix operator
+
+Forward method call
+
+Reverse method call
+
+Fall back
+
+Equality
+
+=a == b=
+
+=a.__eq__(b)=
+
+=b.__eq__(a)=
+
+Return =id(a) == id(b)=
+
+=a != b=
+
+=a.__ne__(b)=
+
+=b.__ne__(a)=
+
+Return =not (a == b)=
+
+Ordering
+
+=a > b=
+
+=a.__gt__(b)=
+
+=b.__lt__(a)=
+
+Raise =TypeError=
+
+=a < b=
+
+=a.__lt__(b)=
+
+=b.__gt__(a)=
+
+Raise =TypeError=
+
+=a >= b=
+
+=a.__ge__(b)=
+
+=b.__le__(a)=
+
+Raise =TypeError=
+
+=a <= b=
+
+=a.__le__(b)=
+
+=b.__ge__(a)=
+
+Raise =TypeError=
+
+*** New Behavior in Python 3
+    :PROPERTIES:
+    :CUSTOM_ID: new-behavior-in-python-3
+    :CLASS: title
+    :END:
+
+The fallback step for all comparison operators changed from Python 2. For =__ne__=, Python 3 now returns the negated result of =__eq__=. For the ordering comparison operators, Python 3 raises =TypeError= with a message like ='unorderable types: int() < tuple()'=. In Python 2, those comparisons produced weird results taking into account object types and IDs in some arbitrary way. However, it really makes no sense to compare an =int= to a =tuple=, for example, so raising =TypeError= in such cases is a real improvement in the language.
+
+Given these rules, let's review and improve the behavior of the =Vector.__eq__= method, which was coded as follows in /vector_v5.py/ ([[file:ch10.html#ex_vector_v5][Example 10-16]]):
+
+#+BEGIN_EXAMPLE
+    class Vector:
+        # many lines omitted
+
+        def __eq__(self, other):
+            return (len(self) == len(other) and
+                    all(a == b for a, b in zip(self, other)))
+#+END_EXAMPLE
+
+That method produces the results in [[file:ch13.html#eq_initial_demo][Example 13-12]].
+
+
+
+Example 13-12. Comparing a Vector to a Vector, a Vector2d, and a tuple
+
+#+BEGIN_EXAMPLE
+    >>> va = Vector([1.0, 2.0, 3.0])
+    >>> vb = Vector(range(1, 4))
+    >>> va == vb  # 
+    True
+    >>> vc = Vector([1, 2])
+    >>> from vector2d_v3 import Vector2d
+    >>> v2d = Vector2d(1, 2)
+    >>> vc == v2d  # 
+    True
+    >>> t3 = (1, 2, 3)
+    >>> va == t3  # 
+    True
+#+END_EXAMPLE
+
+- [[#CO145-1][[[file:callouts/1.png]]]]  :: Two =Vector= instances with equal numeric components compare equal.
+
+- [[#CO145-2][[[file:callouts/2.png]]]]  :: A =Vector= and a =Vector2d= are also equal if their components are equal.
+
+- [[#CO145-3][[[file:callouts/3.png]]]]  :: A =Vector= is also considered equal to a =tuple= or any iterable with numeric items of equal value.
+
+The last one of the results in [[file:ch13.html#eq_initial_demo][Example 13-12]] is probably not desirable. I really have no hard rule about this; it depends on the application context. But the Zen of Python says:
+
+#+BEGIN_QUOTE
+  In the face of ambiguity, refuse the temptation to guess.
+#+END_QUOTE
+
+Excessive liberality in the evaluation of operands may lead to surprising results, and programmers hate surprises.
+
+Taking a clue from Python itself, we can see that =[1,2] == (1, 2)= is =False=. Therefore, let's be conservative and do some type checking. If the second operand is a =Vector= instance (or an instance of a =Vector= subclass), then use the same logic as the current =__eq__=. Otherwise, return =NotImplemented= and let Python handle that. See [[file:ch13.html#ex_vector_v8_eq][Example 13-13]].
+
+
+
+Example 13-13. vector_v8.py: improved __eq__ in the Vector class
+
+#+BEGIN_EXAMPLE
+        def __eq__(self, other):
+            if isinstance(other, Vector):   
+                return (len(self) == len(other) and
+                        all(a == b for a, b in zip(self, other)))
+            else:
+                return NotImplemented   
+#+END_EXAMPLE
+
+- [[#CO146-1][[[file:callouts/1.png]]]]  :: If the =other= operand is an instance of =Vector= (or of a =Vector= subclass), perform the comparison as before.
+
+- [[#CO146-2][[[file:callouts/2.png]]]]  :: Otherwise, return =NotImplemented=.
+
+If you run the tests in [[file:ch13.html#eq_initial_demo][Example 13-12]] with the new =Vector.__eq__= from [[file:ch13.html#ex_vector_v8_eq][Example 13-13]], what you get now is shown in [[file:ch13.html#eq_demo_new_eq][Example 13-14]].
+
+
+
+Example 13-14. Same comparisons as [[file:ch13.html#eq_initial_demo][Example 13-12]]: last result changed
+
+#+BEGIN_EXAMPLE
+    >>> va = Vector([1.0, 2.0, 3.0])
+    >>> vb = Vector(range(1, 4))
+    >>> va == vb  # 
+    True
+    >>> vc = Vector([1, 2])
+    >>> from vector2d_v3 import Vector2d
+    >>> v2d = Vector2d(1, 2)
+    >>> vc == v2d  # 
+    True
+    >>> t3 = (1, 2, 3)
+    >>> va == t3  # 
+    False
+#+END_EXAMPLE
+
+- [[#CO147-1][[[file:callouts/1.png]]]]  :: Same result as before, as expected.
+
+- [[#CO147-2][[[file:callouts/2.png]]]]  :: Same result as before, but why? Explanation coming up.
+
+- [[#CO147-3][[[file:callouts/3.png]]]]  :: Different result; this is what we wanted. But why does it work? Read on...
+
+Among the three results in [[file:ch13.html#eq_demo_new_eq][Example 13-14]], the first one is no news, but the last two were caused by =__eq__= returning =NotImplemented= in [[file:ch13.html#ex_vector_v8_eq][Example 13-13]]. Here is what happens in the example with a =Vector= and a =Vector2d=, step by step:
+
+1. To evaluate =vc == v2d=, Python calls =Vector.__eq__(vc, v2d)=.
+2. =Vector.__eq__(vc, v2d)= verifies that =v2d= is not a =Vector= and returns =NotImplemented=.
+3. Python gets =NotImplemented= result, so it tries =Vector2d.__eq__(v2d, vc)=.
+4. =Vector2d.__eq__(v2d, vc)= turns both operands into tuples an compares them: the result is =True= (the code for =Vector2d.__eq__= is in [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]]).
+
+As for the comparison between =Vector= and =tuple= in [[file:ch13.html#eq_demo_new_eq][Example 13-14]], the actual steps are:
+
+1. To evaluate =va == t3=, Python calls =Vector.__eq__(va, t3)=.
+2. =Vector.__eq__(va, t3)= verifies that =t3= is not a =Vector= and returns =NotImplemented=.
+3. Python gets =NotImplemented= result, so it tries =tuple.__eq__(t3, va)=.
+4. =tuple.__eq__(t3, va)= has no idea what a =Vector= is, so it returns =NotImplemented=.
+5. In the special case of ====, if the reversed call returns =NotImplemented=, Python compares object IDs as a last resort.
+
+How about =!==? We don't need to implement it because the fallback behavior of the =__ne__= inherited from =object= suits us: when =__eq__= is defined and does not return =NotImplemented=, =__ne__= returns that result negated.
+
+In other words, given the same objects we used in [[file:ch13.html#eq_demo_new_eq][Example 13-14]], the results for =!== are consistent:
+
+#+BEGIN_EXAMPLE
+    >>> va != vb
+    False
+    >>> vc != v2d
+    False
+    >>> va != (1, 2, 3)
+    True
+#+END_EXAMPLE
+
+The =__ne__= inherited from =object= works like the following code---except that the original is written in C:^{[[[#ftn.id702066][101]]]}
+
+#+BEGIN_EXAMPLE
+        def __ne__(self, other):
+            eq_result = self == other
+            if eq_result is NotImplemented:
+                return NotImplemented
+            else:
+                return not eq_result
+#+END_EXAMPLE
+
+*** Python 3 Documentation Bug
+    :PROPERTIES:
+    :CUSTOM_ID: python-3-documentation-bug
+    :CLASS: title
+    :END:
+
+As I write this, the [[https://docs.python.org/3/reference/datamodel.html][rich comparison method documentation]] states: “The truth of =x==y= does not imply that =x!=y= is false. Accordingly, when defining =__eq__()=, one should also define =__ne__()= so that the operators will behave as expected.” That was true for Python 2, but in Python 3 that's not good advice, because a useful default =__ne__= implementation is inherited from the =object= class, and it's rarely necessary to override it. The new behavior is documented in Guido's [[http://bit.ly/1C11zP5][What's New in Python 3.0]], in the section “Operators And Special Methods.” The documentation bug is recorded as [[http://bugs.python.org/issue4395][issue 4395]].
+
+After covering the essentials of infix operator overloading, let's turn to a different class of operators: the augmented assignment operators.
+
+** Augmented Assignment Operators
+
+
+Our =Vector= class already supports the augmented assignment operators =+== and =*==. [[file:ch13.html#eq_demo_augm_assign_immutable][Example 13-15]] shows them in action.
+
+
+
+Example 13-15. Augmented assignment works with immutable targets by creating new instances and rebinding
+
+#+BEGIN_EXAMPLE
+    >>> v1 = Vector([1, 2, 3])
+    >>> v1_alias = v1  # 
+    >>> id(v1)  # 
+    4302860128
+    >>> v1 += Vector([4, 5, 6])  # 
+    >>> v1  # 
+    Vector([5.0, 7.0, 9.0])
+    >>> id(v1)  # 
+    4302859904
+    >>> v1_alias  # 
+    Vector([1.0, 2.0, 3.0])
+    >>> v1 *= 11  # 
+    >>> v1  # 
+    Vector([55.0, 77.0, 99.0])
+    >>> id(v1)
+    4302858336
+#+END_EXAMPLE
+
+- [[#CO148-1][[[file:callouts/1.png]]]]  :: Create alias so we can inspect the =Vector([1, 2, 3])= object later.
+
+- [[#CO148-2][[[file:callouts/2.png]]]]  :: Remember the ID of the initial =Vector= bound to =v1=.
+
+- [[#CO148-3][[[file:callouts/3.png]]]]  :: Perform augmented addition.
+
+- [[#CO148-4][[[file:callouts/4.png]]]]  :: The expected result...
+
+- [[#CO148-5][[[file:callouts/5.png]]]]  :: ...but a new =Vector= was created.
+
+- [[#CO148-6][[[file:callouts/6.png]]]]  :: Inspect =v1_alias= to confirm the original =Vector= was not altered.
+
+- [[#CO148-7][[[file:callouts/7.png]]]]  :: Perform augmented multiplication.
+
+- [[#CO148-8][[[file:callouts/8.png]]]]  :: Again, the expected result, but a new =Vector= was created.
+
+If a class does not implement the in-place operators listed in [[file:ch13.html#infix_operator_names_tbl][Table 13-1]], the augmented assignment operators are just syntactic sugar: =a += b= is evaluated exactly as =a = a + b=. That's the expected behavior for immutable types, and if you have =__add__= then =+== will work with no additional code.
+
+However, if you do implement an in-place operator method such as =__iadd__=, that method is called to compute the result of =a += b=. As the name says, those operators are expected to change the lefthand operand in place, and not create a new object as the result.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-4
+    :CLASS: title
+    :END:
+
+The in-place special methods should never be implemented for immutable types like our =Vector= class. This is fairly obvious, but worth stating anyway.
+
+To show the code of an in-place operator, we will extend the =BingoCage= class from [[file:ch11.html#ex_tombola_bingo][Example 11-12]] to implement =__add__= and =__iadd__=.
+
+We'll call the subclass =AddableBingoCage=. [[file:ch13.html#demo_addable_bingo_add][Example 13-16]] is the behavior we want for the =+= operator.
+
+
+
+Example 13-16. A new AddableBingoCage instance can be created with
+
+#+BEGIN_EXAMPLE
+        >>> vowels = 'AEIOU'
+        >>> globe = AddableBingoCage(vowels)   
+        >>> globe.inspect()
+        ('A', 'E', 'I', 'O', 'U')
+        >>> globe.pick() in vowels   
+        True
+        >>> len(globe.inspect())   
+        4
+        >>> globe2 = AddableBingoCage('XYZ')   
+        >>> globe3 = globe + globe2
+        >>> len(globe3.inspect())   
+        7
+        >>> void = globe + [10, 20]   
+        Traceback (most recent call last):
+          ...
+        TypeError: unsupported operand type(s) for +: 'AddableBingoCage' and 'list'
+#+END_EXAMPLE
+
+- [[#CO149-1][[[file:callouts/1.png]]]]  :: Create a =globe= instance with five items (each of the =vowels=).
+
+- [[#CO149-2][[[file:callouts/2.png]]]]  :: Pop one of the items, and verify it is one the =vowels=.
+
+- [[#CO149-3][[[file:callouts/3.png]]]]  :: Confirm that the =globe= is down to four items.
+
+- [[#CO149-4][[[file:callouts/4.png]]]]  :: Create a second instance, with three items.
+
+- [[#CO149-5][[[file:callouts/5.png]]]]  :: Create a third instance by adding the previous two. This instance has seven items.
+
+- [[#CO149-6][[[file:callouts/6.png]]]]  :: Attempting to add an =AddableBingoCage= to a =list= fails with =TypeError=. That error message is produced by the Python interpreter when our =__add__= method returns =NotImplemented=.
+
+Because an =AddableBingoCage= is mutable, [[file:ch13.html#demo_addable_bingo_iadd][Example 13-17]] shows how it will work when we implement =__iadd__=.
+
+
+
+Example 13-17. An existing AddableBingoCage can be loaded with += (continuing from [[file:ch13.html#demo_addable_bingo_add][Example 13-16]])
+
+#+BEGIN_EXAMPLE
+        >>> globe_orig = globe   
+        >>> len(globe.inspect())   
+        4
+        >>> globe += globe2   
+        >>> len(globe.inspect())
+        7
+        >>> globe += ['M', 'N']   
+        >>> len(globe.inspect())
+        9
+        >>> globe is globe_orig   
+        True
+        >>> globe += 1   
+        Traceback (most recent call last):
+          ...
+        TypeError: right operand in += must be 'AddableBingoCage' or an iterable
+#+END_EXAMPLE
+
+- [[#CO150-1][[[file:callouts/1.png]]]]  :: Create an alias so we can check the identity of the object later.
+
+- [[#CO150-2][[[file:callouts/2.png]]]]  :: =globe= has four items here.
+
+- [[#CO150-3][[[file:callouts/3.png]]]]  :: An =AddableBingoCage= instance can receive items from another instance of the same class.
+
+- [[#CO150-4][[[file:callouts/4.png]]]]  :: The righthand operand of =+== can also be any iterable.
+
+- [[#CO150-5][[[file:callouts/5.png]]]]  :: Throughout this example, =globe= has always referred to the =globe_orig= object.
+
+- [[#CO150-6][[[file:callouts/6.png]]]]  :: Trying to add a noniterable to an =AddableBingoCage= fails with a proper error message.
+
+Note that the =+== operator is more liberal than =+= with regard to the second operand. With =+=, we want both operands to be of the same type (=AddableBingoCage=, in this case), because if we accepted different types this might cause confusion as to the type of the result. With the =+==, the situation is clearer: the lefthand object is updated in place, so there's no doubt about the type of the result.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip
+    :CLASS: title
+    :END:
+
+I validated the contrasting behavior of =+= and =+== by observing how the =list= built-in type works. Writing =my_list + x=, you can only concatenate one =list= to another =list=, but if you write =my_list += x=, you can extend the lefthand =list= with items from any iterable =x= on the righthand side. This is consistent with how the =list.extend()= method works: it accepts any iterable argument.
+
+Now that we are clear on the desired behavior for =AddableBingoCage=, we can look at its implementation in [[file:ch13.html#ex_addable_bingo][Example 13-18]].
+
+
+
+Example 13-18. bingoaddable.py: AddableBingoCage extends BingoCage to support + and +=
+
+#+BEGIN_EXAMPLE
+    import itertools   
+
+    from tombola import Tombola
+    from bingo import BingoCage
+
+
+    class AddableBingoCage(BingoCage):   
+
+        def __add__(self, other):
+            if isinstance(other, Tombola):   
+                return AddableBingoCage(self.inspect() + other.inspect())   
+            else:
+                return NotImplemented
+
+        def __iadd__(self, other):
+            if isinstance(other, Tombola):
+                other_iterable = other.inspect()   
+            else:
+                try:
+                    other_iterable = iter(other)   
+                except TypeError:   
+                    self_cls = type(self).__name__
+                    msg = "right operand in += must be {!r} or an iterable"
+                    raise TypeError(msg.format(self_cls))
+            self.load(other_iterable)   
+            return self   
+#+END_EXAMPLE
+
+- [[#CO151-1][[[file:callouts/1.png]]]]  :: [[https://www.python.org/dev/peps/pep-0008/#imports][PEP 8 --- Style Guide for Python Code]] recommends coding imports from the standard library above imports of your own modules.
+
+- [[#CO151-2][[[file:callouts/2.png]]]]  :: =AddableBingoCage= extends =BingoCage=.
+
+- [[#CO151-3][[[file:callouts/3.png]]]]  :: Our =__add__= will only work with an instance of =Tombola= as the second operand.
+
+- [[#CO151-4][[[file:callouts/4.png]]]]  :: Retrieve items from =other=, if it is an instance of =Tombola=.
+
+- [[#CO151-5][[[file:callouts/5.png]]]]  :: Otherwise, try to obtain an iterator over =other=.^{[[[#ftn.id1005952][102]]]}
+
+- [[#CO151-6][[[file:callouts/6.png]]]]  :: If that fails, raise an exception explaining what the user should do. When possible, error messages should explicitly guide the user to the solution.
+
+- [[#CO151-7][[[file:callouts/7.png]]]]  :: If we got this far, we can load the =other_iterable= into =self=.
+
+- [[#CO151-8][[[file:callouts/8.png]]]]  :: Very important: augmented assignment special methods must return =self=.
+
+We can summarize the whole idea of in-place operators by contrasting the =return= statements that produce results in =__add__= and =__iadd__= in [[file:ch13.html#ex_addable_bingo][Example 13-18]]:
+
+-  =__add__=  :: The result is produced by calling the constructor =AddableBingoCage= to build a new instance.
+-  =__iadd__=  :: The result is produced by returning =self=, after it has been modified.
+
+To wrap up this example, a final observation on [[file:ch13.html#ex_addable_bingo][Example 13-18]]: by design, no =__radd__= was coded in =AddableBingoCage=, because there is no need for it. The forward method =__add__= will only deal with righthand operands of the same type, so if Python is trying to compute =a + b= where =a= is an =AddableBingoCage= and =b= is not, we return =NotImplemented=---maybe the class of =b= can make it work. But if the expression is =b + a= and =b= is not an =AddableBingoCage=, and it returns =NotImplemented=, then it's better to let Python give up and raise =TypeError= because we cannot handle =b=.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-1
+    :CLASS: title
+    :END:
+
+In general, if a forward infix operator method (e.g., =__mul__=) is designed to work only with operands of the same type as =self=, it's useless to implement the corresponding reverse method (e.g., =__rmul__=) because that, by definition, will only be invoked when dealing with an operand of a different type.
+
+This concludes our exploration of operator overloading in Python.
+
+** Chapter Summary
+
+
+We started this chapter by reviewing some restrictions Python imposes on operator overloading: no overloading of operators in built-in types, and overloading limited to existing operators, except for a few ones (=is=, =and=, =or=, =not=).
+
+We got down to business with the unary operators, implementing =__neg__= and =__pos__=. Next came the infix operators, starting with =+=, supported by the =__add__= method. We saw that unary and infix operators are supposed to produce results by creating new objects, and should never change their operands. To support operations with other types, we return the =NotImplemented= special value---not an exception---allowing the interpreter to try again by swapping the operands and calling the reverse special method for that operator (e.g., =__radd__=). The algorithm Python uses to handle infix operators is summarized in the flowchart in [[file:ch13.html#operator_flowchart][Figure 13-1]].
+
+Mixing operand types means we need to detect when we get an operand we can't handle. In this chapter, we did this in two ways: in the duck typing way, we just went ahead and tried the operation, catching a =TypeError= exception if it happened; later, in =__mul__=, we did it with an explicit =isinstance= test. There are pros and cons to these approaches: duck typing is more flexible, but explicit type checking is more predictable. When we did use =isinstance=, we were careful to avoid testing with a concrete class, but used the =numbers.Real= ABC: =isinstance(scalar, numbers.Real)=. This is a good compromise between flexibility and safety, because existing or future user-defined types can be declared as actual or virtual subclasses of an ABC, as we saw in [[file:ch11.html][Chapter 11]].
+
+The next topic we covered was the rich comparison operators. We implemented ==== with =__eq__= and discovered that Python provides a handy implementation of =!== in the =__ne__= inherited from the =object= base class. The way Python evaluates these operators along with =>=, =<=, =>==, and =<== is slightly different, with a different logic for choosing the reverse method, and special fallback handling for ==== and =!==, which never generate errors because Python compares the object IDs as a last resort.
+
+In the last section, we focused on augmented assignment operators. We saw that Python handles them by default as a combination of plain operator followed by assignment, that is: =a += b= is evaluated exactly as =a = a + b=. That always creates a new object, so it works for mutable or immutable types. For mutable objects, we can implement in-place special methods such as =__iadd__= for =+==, and alter the value of the lefthand operand. To show this at work, we left behind the immutable =Vector= class and worked on implementing a =BingoCage= subclass to support =+== for adding items to the random pool, similar to the way the =list= built-in supports =+== as a shortcut for the =list.extend()= method. While doing this, we discussed how =+= tends to be stricter than =+== regarding the types it accepts. For sequence types, =+= usually requires that both operands are of the same type, while =+== often accepts any iterable as the righthand operand.
+
+** Further Reading
+
+
+Operator overloading is one area of Python programming where =isinstance= tests are common. In general, libraries should leverage dynamic typing---to be more flexible---by avoiding explicit type tests and just trying operations and then handling the exceptions, opening the door for working with objects regardless of their types, as long as they support the necessary operations. But Python ABCs allow a stricter form of duck typing, dubbed “goose typing” by Alex Martelli, which is often useful when writing code that overloads operators. So, if you skipped [[file:ch11.html][Chapter 11]], make sure to read it.
+
+The main reference for the operator special methods is the [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]]. It's the canonical source, but at this time it's plagued by that glaring bug mentioned in [[file:ch13.html#ne_doc_bug_warning][Python 3 Documentation Bug]], advising “when defining =__eq__()=, one should also define =__ne__()=.” In reality, the =__ne__= inherited from the =object= class in Python 3 covers the vast majority of needs, so implementing =__ne__= is rarely necessary in practice. Another relevant reading in the Python documentation is [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module of The Python Standard Library.
+
+A related technique is generic functions, supported by the =@singledispatch= decorator in Python 3 ([[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]]). In /Python Cookbook/, 3E (O'Reilly), by David Beazley and Brian K. Jones, “Recipe 9.20. Implementing Multiple Dispatch with Function Annotations” uses some advanced metaprogramming---involving a metaclass---to implement type-based dispatching with function annotations. The second edition of the /Python Cookbook/ by Martelli, Ravenscroft, and Ascher has an interesting recipe (2.13, by Erik Max Francis) showing how to overload the =<<= operator to emulate the C++ =iostream= syntax in Python. Both books have other examples with operator overloading, I just picked two notable recipes.
+
+The =functools.total_ordering= function is a class decorator (supported in Python 2.7 and later) that automatically generates methods for all rich comparison operators in any class that defines at least a couple of them. See the [[http://bit.ly/1C12IWF][functools module docs]].
+
+If you are curious about operator method dispatching in languages with dynamic typing, two seminal readings are [[http://bit.ly/1FVhejw][“A Simple Technique for Handling Multiple Polymorphism”]] by Dan Ingalls (member of the original Smalltalk team) and [[http://bit.ly/1QrnuuD][“Arithmetic and Double Dispatching in Smalltalk-80”]] by Kurt J. Hebel and Ralph Johnson (Johnson became famous as one of the authors of the original /Design Patterns/ book). Both papers provide deep insight into the power of polymorphism in languages with dynamic typing, like Smalltalk, Python, and Ruby. Python does not use double dispatching for handling operators as described in those articles. The Python algorithm using forward and reverse operators is easier for user-defined classes to support than double dispatching, but requires special handling by the interpreter. In contrast, classic double dispatching is a general technique you can use in Python or any OO language beyond the specific context of infix operators, and in fact Ingalls, Hebel, and Johnson use very different examples to describe it.
+
+The article [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]] from which I quoted the epigraph in this chapter, and two other snippets in [[file:ch13.html#operator_soapbox][Soapbox]], appeared in /Java Report/, 5(7), July 2000 and /C++ Report/, 12(7), July/August 2000. It's an awesome reading if you are into programming language design.
+
+
+
+Soapbox
+
+*Operator Overloading: Pros and Cons*
+
+James Gosling, quoted at the start of this chapter, made the conscious decision to leave operator overloading out when he designed Java. In that same interview ([[http://bit.ly/1C12T4t][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]]) he says:
+
+#+BEGIN_QUOTE
+  Probably about 20 to 30 percent of the population think of operator overloading as the spawn of the devil; somebody has done something with operator overloading that has just really ticked them off, because they've used like + for list insertion and it makes life really, really confusing. A lot of that problem stems from the fact that there are only about half a dozen operators you can sensibly overload, and yet there are thousands or millions of operators that people would like to define---so you have to pick, and often the choices conflict with your sense of intuition.
+#+END_QUOTE
+
+Guido van Rossum picked the middle way in supporting operator overloading: he did not leave the door open for users creating new arbitrary operators like =<=>= or =:-)=, which prevents a Tower of Babel of custom operators, and allows the Python parser to be simple. Python also does not let you overload the operators of the built-in types, another limitation that promotes readability and predictable performance.
+
+Gosling goes on to say:
+
+#+BEGIN_QUOTE
+  Then there's a community of about 10 percent that have actually used operator overloading appropriately and who really care about it, and for whom it's actually really important; this is almost exclusively people who do numerical work, where the notation is very important to appealing to people's intuition, because they come into it with an intuition about what the + means, and the ability to say “a + b” where a and b are complex numbers or matrices or something really does make sense.
+#+END_QUOTE
+
+The notation side of the issue cannot be underestimated. Here is an illustrative example from the realm of finances. In Python, you can compute compound interest using a formula written like this:
+
+#+BEGIN_EXAMPLE
+    interest = principal * ((1 + rate) ** periods - 1)
+#+END_EXAMPLE
+
+That same notation works regardless of the numeric types involved. Thus, if you are doing serious financial work, you can make sure that =periods= is an =int=, while =rate=, =interest=, and =principal= are exact numbers---instances of the Python =decimal.Decimal= class --- and that formula will work exactly as written.
+
+But in Java, if you switch from =float= to =BigDecimal= to get arbitrary precision, you can't use infix operators anymore, because they only work with the primitive types. This is the same formula coded to work with =BigDecimal= numbers in Java:
+
+#+BEGIN_EXAMPLE
+    BigDecimal interest = principal.multiply(BigDecimal.ONE.add(rate)
+                            .pow(periods).subtract(BigDecimal.ONE));
+#+END_EXAMPLE
+
+It's clear that infix operators make formulas more readable, at least for most of us.^{[[[#ftn.id958483][103]]]} And operator overloading is necessary to support nonprimitive types with infix operator notation. Having operator overloading in a high-level, easy-to-use language was probably a key reason for the amazing penetration of Python in scientific computing in recent years.
+
+Of course, there are benefits to disallowing operator overloading in a language. It is arguably a sound decision for lower-level systems languages where performance and safety are paramount. The much newer Go language followed the lead of Java in this regard and does not support operator overloading.
+
+But overloaded operators, when used sensibly, do make code easier to read and write. It's a great feature to have in a modern high-level language.
+
+*A Glimpse at Lazy Evaluation*
+
+If you look closely at the traceback in [[file:ch13.html#ex_vector_error_iter_not_add][Example 13-9]], you'll see evidence of the /lazy/ evaluation of generator expressions. [[file:ch13.html#ex_vector_error_iter_not_add_repeat][Example 13-19]] is that same traceback, now with callouts.
+
+
+
+Example 13-19. Same as [[file:ch13.html#ex_vector_error_iter_not_add][Example 13-9]]
+
+#+BEGIN_EXAMPLE
+    >>> v1 + 'ABC'
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "vector_v6.py", line 329, in __add__
+        return Vector(a + b for a, b in pairs)  # 
+      File "vector_v6.py", line 243, in __init__
+        self._components = array(self.typecode, components)  # 
+      File "vector_v6.py", line 329, in <genexpr>
+        return Vector(a + b for a, b in pairs)  # 
+    TypeError: unsupported operand type(s) for +: 'float' and 'str'
+#+END_EXAMPLE
+
+- [[#CO152-1][[[file:callouts/1.png]]]]  :: The =Vector= call gets a generator expression as its =components= argument. No problem at this stage.
+
+- [[#CO152-2][[[file:callouts/2.png]]]]  :: The =components= genexp is passed to the =array= constructor. Within the =array= constructor, Python tries to iterate over the genexp, causing the evaluation of the first item =a + b=. That's when the =TypeError= occurs.
+
+- [[#CO152-3][[[file:callouts/3.png]]]]  :: The exception propagates to the =Vector= constructor call, where it is reported.
+
+This shows how the generator expression is evaluated at the latest possible moment, and not where it is defined in the source code.
+
+In contrast, if the =Vector= constructor was invoked as =Vector([a + b for a, b in pairs])=, then the exception would happen right there, because the list comprehension tried to build a =list= to be passed as the argument to the =Vector()= call. The body of =Vector.__init__= would not be reached at all.
+
+[[file:ch14.html][Chapter 14]] will cover generator expressions in detail, but I did not want to let this accidental demonstration of their lazy nature go unnoticed.
+
+
+
+--------------
+
+
+^{[[[#id973194][98]]]} Source: [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]].
+
+
+^{[[[#id984216][99]]]} The Python documentation uses both terms. The [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]] uses “reflected,” but [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module docs mention “forward” and “reverse” methods, and I find this terminology better, because “forward” and “reversed” clearly name each of the directions, while “reflected” doesn't have an obvious opposite.
+
+
+^{[[[#id561864][100]]]} The =@= sign can be used as an infix dot product operator starting with Python 3.5. More about it in [[file:ch13.html#matmul_operator_sec][The New @ Infix Operator in Python 3.5]].
+
+
+^{[[[#id702066][101]]]} The logic for =object.__eq__= and =object.__ne__= is in function =object_richcompare= in [[http://bit.ly/1C11uL7][Objects/typeobject.c]] in the CPython source code.
+
+
+^{[[[#id1005952][102]]]} The =iter= built-in function will be covered in the next chapter. Here I could have used =tuple(other)=, and it would work, but at the cost of building a new =tuple= when all the =.load(…)= method needs is to iterate over its argument.
+
+
+^{[[[#id958483][103]]]} My friend Mario Domenech Goulart, a core developer of the [[http://www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+
+[[#id973194][98]]]} Source: [[http://www.gotw.ca/publications/c_family_interview.htm][“The C Family of Languages: Interview with Dennis Ritchie, Bjarne Stroustrup, and James Gosling”]].
+
+
+^{[[[#id984216][99]]]} The Python documentation uses both terms. The [[https://docs.python.org/3/reference/datamodel.html][“Data Model” chapter]] uses “reflected,” but [[http://bit.ly/1JHWP8W][“9.1.2.2. Implementing the arithmetic operations”]] in the =numbers= module docs mention “forward” and “reverse” methods, and I find this terminology better, because “forward” and “reversed” clearly name each of the directions, while “reflected” doesn't have an obvious opposite.
+
+
+^{[[[#id561864][100]]]} The =@= sign can be used as an infix dot product operator starting with Python 3.5. More about it in [[file:ch13.html#matmul_operator_sec][The New @ Infix Operator in Python 3.5]].
+
+
+^{[[[#id702066][101]]]} The logic for =object.__eq__= and =object.__ne__= is in function =object_richcompare= in [[http://bit.ly/1C11uL7][Objects/typeobject.c]] in the CPython source code.
+
+
+^{[[[#id1005952][102]]]} The =iter= built-in function will be covered in the next chapter. Here I could have used =tuple(other)=, and it would work, but at the cost of building a new =tuple= when all the =.load(…)= method needs is to iterate over its argument.
+
+
+^{[[[#id958483][103]]]} My friend Mario Domenech Goulart, a core developer of the [[http://www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+
+www.call-cc.org/][CHICKEN Scheme compiler]], will probably disagree with this.
+
+

@@ -1,0 +1,1218 @@
+* Chapter 10. Sequence Hacking, Hashing, and Slicing
+
+
+We are making heavy use of generator expressions in =__format__=, =angle=, and =angles= but our focus here is in providing =__format__= to bring =Vector= to the same implementation level as =Vector2d=. When we cover generators in [[file:ch14.html][Chapter 14]] we'll use some of the code in =Vector= as examples, and then the generator tricks will be explained in detail.
+
+This concludes our mission for this chapter. The =Vector= class will be enhanced with infix operators in [[file:ch13.html][Chapter 13]], but our goal here was to explore techniques for coding special methods that are useful in a wide variety of collection classes.
+
+** Chapter Summary
+
+
+The =Vector= example in this chapter was designed to be compatible with =Vector2d=, except for the use of a different constructor signature accepting a single iterable argument, just like the built-in sequence types do. The fact that =Vector= behaves as a sequence just by implementing =__getitem__= and =__len__= prompted a discussion of protocols, the informal interfaces used in duck-typed languages.
+
+We then looked at how the =my_seq[a:b:c]= syntax works behind the scenes, by creating a =slice(a, b, c)= object and handing it to =__getitem__=. Armed with this knowledge, we made =Vector= respond correctly to slicing, by returning new =Vector= instances, just like a Pythonic sequence is expected to do.
+
+The next step was to provide read-only access to the first few =Vector= components using notation such as =my_vec.x=. We did it by implementing =__getattr__=. Doing that opened the possibility of tempting the user to assign to those special components by writing =my_vec.x = 7=, revealing a potential bug. We fixed it by implementing =__setattr__= as well, to forbid assigning values to single-letter attributes. Very often, when you code a =__getattr__= you need to add =__setattr__= too, in order to avoid inconsistent behavior.
+
+Implementing the =__hash__= function provided the perfect context for using =functools.reduce=, because we needed to apply the xor operator =^= in succession to the hashes of all =Vector= components to produce an aggregate hash value for the whole =Vector=. After applying =reduce= in =__hash__=, we used the =all= reducing built-in to create a more efficient =__eq__= method.
+
+The last enhancement to =Vector= was to reimplement the =__format__= method from =Vector2d= by supporting spherical coordinates as an alternative to the default Cartesian coordinates. We used quite a bit of math and several generators to code =__format__= and its auxiliary functions, but these are implementation details---and we'll come back to the generators in [[file:ch14.html][Chapter 14]]. The goal of that last section was to support a custom format, thus fulfilling the promise of a =Vector= that could do everything a =Vector2d= did, and more.
+
+As we did in [[file:ch09.html][Chapter 9]], here we often looked at how standard Python objects behave, to emulate them and provide a “Pythonic” look-and-feel to =Vector=.
+
+In [[file:ch13.html][Chapter 13]], we will implement several infix operators on =Vector=. The math will be much simpler than that in the =angle()= method here, but exploring how infix operators work in Python is a great lesson in OO design. But before we get to operator overloading, we'll step back from working on one class and look at organizing multiple classes with interfaces and inheritance, the subjects of Chapters [[file:ch11.html][11]] and [[file:ch11.html][11]].
+
+** Further Reading
+
+
+Most special methods covered in the =Vector= example also appear in the =Vector2d= example from [[file:ch09.html][Chapter 9]], so the references in [[file:ch09.html#pythonic_further_reading][Further Reading]] are all relevant here.
+
+The powerful =reduce= higher-order function is also known as fold, accumulate, aggregate, compress, and inject. For more information, see Wikipedia's [[http://en.wikipedia.org/wiki/Fold_(higher-order_function)][“Fold (higher-order function)” article]], which presents applications of that higher-order function with emphasis on functional programming with recursive data structures. The article also includes a table listing fold-like functions in dozens of programming languages.
+
+
+
+Soapbox
+
+*Protocols as Informal Interfaces*
+
+Protocols are not an invention of Python. The Smalltalk team, who also coined the expression “object oriented,” used “protocol” as a synonym for what we now call interfaces. Some Smalltalk programming environments allowed programmers to tag a group of methods as a protocol, but that was merely a documentation and navigation aid, and not enforced by the language. That's why I believe “informal interface” is a reasonable short explanation for “protocol” when I speak to an audience that is more familiar with formal (and compiler enforced) interfaces.
+
+Established protocols naturally evolve in any language that uses dynamic typing, that is, when type-checking done at runtime because there is no static type information in method signatures and variables. Ruby is another important OO language that has dynamic typing and uses protocols.
+
+In the Python documentation, you can often tell when a protocol is being discussed when you see language like “a file-like object.” This is a quick way of saying “something that behaves sufficiently like a file, by implementing the parts of the file interface that are relevant in the context.”
+
+You may think that implementing only part of a protocol is sloppy, but it has the advantage of keeping things simple. [[http://bit.ly/pydocs-smn][Section 3.3]] of the “Data Model” chapter suggests:
+
+#+BEGIN_QUOTE
+  When implementing a class that emulates any built-in type, it is important that the emulation only be implemented to the degree that it makes sense for the object being modeled. For example, some sequences may work well with retrieval of individual elements, but extracting a slice may not make sense.
+
+  --- “Data Model” chapter of /The Python Language Reference/
+
+#+END_QUOTE
+
+When we don't need to code nonsense methods just to fulfill some over-designed interface contract and keep the compiler happy, it becomes easier to follow the [[http://en.wikipedia.org/wiki/KISS_principle][KISS principle]].
+
+I'll have more to say about protocols and interfaces in [[file:ch11.html][Chapter 11]], where that is actually the main focus.
+
+*Origins of Duck Typing*
+
+I believe the Ruby community, more than any other, helped popularize the term “duck typing,” as they preached to the Java masses. But the expression has been used in Python discussions before either Ruby or Python were “popular.” According to Wikipedia, an early example of the duck analogy in object-oriented programming is a message to the Python-list by Alex Martelli from July 26, 2000: [[http://bit.ly/1QOuTPx][polymorphism (was Re: Type checking in python?)]]. That's where the quote at the beginning of this chapter came from. If you are curious about the literary origins of the “duck typing” term, and the applications of this OO concept in many languages, check out Wikipedia's [[http://en.wikipedia.org/wiki/Duck_typing][“Duck typing” entry]].
+
+*A safe /format/, with Enhanced Usability*
+
+While implementing =__format__=, we did not take any precautions regarding =Vector= instances with a very large number of components, as we did in =__repr__= using =reprlib=. The reasoning is that =repr()= is for debugging and logging, so it must always generate some serviceable output, while =__format__= is used to display output to end users who presumably want to see the entire =Vector=. If you think this is dangerous, then it would be cool to implement a further extension to the format specifier mini-language.
+
+Here is how I'd do it: by default, any formatted =Vector= would display a reasonable but limited number of components, say 30. If there are more elements than that, the default behavior would be similar to what the =reprlib= does: chop the excess and put =...= in its place. However, if the format specifier ended with the special =*= code, meaning “all,” then the size limitation would be disabled. So a user who's unaware of the problem of very long displays will not be bitten by it by accident. But if the default limitation becomes a nuisance, then the presence of the =...= should prompt the user to research the documentation and discover the =*= formatting code.
+
+Send a pull request to the [[https://github.com/fluentpython/example-code][/Fluent Python/ repository on GitHub]] if you implement this!
+
+*The Search for a Pythonic Sum*
+
+There's no single answer to “What is Pythonic?” just as there's no single answer to “What is beautiful?” Saying, as I often do, that it means using “idiomatic Python” is not 100% satisfactory, because what may be “idiomatic” for you may not be for me. One thing I know: “idiomatic” does not mean using the most obscure language features.
+
+In the [[https://mail.python.org/mailman/listinfo/python-list][Python-list]], there's a thread from April 2003 titled [[http://bit.ly/1QOv5y5][“Pythonic Way to Sum n-th List Element?”]]. It's relevant to our discussion of =reduce= in this chapter.
+
+The original poster, Guy Middleton, asked for an improvement on this solution, stating he did not like to use =lambda=:^{[[[#ftn.id432810][66]]]}
+
+#+BEGIN_EXAMPLE
+    >>> my_list = [[1, 2, 3], [40, 50, 60], [9, 8, 7]]
+    >>> import functools
+    >>> functools.reduce(lambda a, b: a+b, [sub[1] for sub in my_list])
+    60
+#+END_EXAMPLE
+
+That code uses lots of idioms: =lambda=, =reduce=, and a list comprehension. It would probably come last in a popularity contest, because it offends people who hate =lambda= and those who despise list comprehensions---pretty much both sides of a divide.
+
+If you're going to use =lambda=, there's probably no reason to use a list comprehension---except for filtering, which is not the case here.
+
+Here is a solution of my own that will please the =lambda= lovers:
+
+#+BEGIN_EXAMPLE
+    >>> functools.reduce(lambda a, b: a + b[1], my_list, 0)
+    60
+#+END_EXAMPLE
+
+I did not take part in the original thread, and I wouldn't use that in real code, because I don't like =lambda= too much myself, but I wanted to show an example without a list comprehension.
+
+The first answer came from Fernando Perez, creator of IPython, highlighting that NumPy supports /n/-dimensional arrays and /n/-dimensional slicing:
+
+#+BEGIN_EXAMPLE
+    >>> import numpy as np
+    >>> my_array = np.array(my_list)
+    >>> np.sum(my_array[:, 1])
+    60
+#+END_EXAMPLE
+
+I think Perez's solution is cool, but Guy Middleton praised this next solution, by Paul Rubin and Skip Montanaro:
+
+#+BEGIN_EXAMPLE
+    >>> import operator
+    >>> functools.reduce(operator.add, [sub[1] for sub in my_list], 0)
+    60
+#+END_EXAMPLE
+
+Then Evan Simpson asked, “What's wrong with this?”:
+
+#+BEGIN_EXAMPLE
+    >>> t = 0
+    >>> for sub in my_list:
+    ...     total += sub[1]
+    >>> t
+    60
+#+END_EXAMPLE
+
+Lots of people agreed that was quite Pythonic. Alex Martelli went as far as saying that's probably how Guido would code it.
+
+I like Evan Simpson's code but I also like David Eppstein's comment on it:
+
+#+BEGIN_QUOTE
+  If you want the sum of a list of items, you should write it in a way that looks like “the sum of a list of items”, not in a way that looks like “loop over these items, maintain another variable t, perform a sequence of additions”. Why do we have high level languages if not to express our intentions at a higher level and let the language worry about what low-level operations are needed to implement it?
+#+END_QUOTE
+
+Then Alex Martelli comes back to suggest:
+
+#+BEGIN_QUOTE
+  “The sum” is so frequently needed that I wouldn't mind at all if Python singled it out as a built-in. But “reduce(operator.add, ...” just isn't a great way to express it, in my opinion (and yet as an old APL'er, and FP-liker, I /should/ like it---but I don't).
+#+END_QUOTE
+
+Alex goes on to suggest a =sum()= function, which he contributed. It became a built-in in Python 2.3, released only three months after that conversation took place. So Alex's preferred syntax became the norm:
+
+#+BEGIN_EXAMPLE
+    >>> sum([sub[1] for sub in my_list])
+    60
+#+END_EXAMPLE
+
+By the end of the next year (November 2004), Python 2.4 was launched with generator expressions, providing what is now in my opinion the most Pythonic answer to Guy Middleton's original question:
+
+#+BEGIN_EXAMPLE
+    >>> sum(sub[1] for sub in my_list)
+    60
+#+END_EXAMPLE
+
+This is not only more readable than =reduce= but also avoids the trap of the empty sequence: =sum([])= is =0=, simple as that.
+
+In the same conversation, Alex Martelli suggests the =reduce= built-in in Python 2 was more trouble than it was worth, because it encouraged coding idioms that were hard to explain. He was most convincing: the function was demoted to the =functools= module in Python 3.
+
+Still, =functools.reduce= has its place. It solved the problem of our =Vector.__hash__= in a way that I would call Pythonic.
+
+
+
+--------------
+
+
+^{[[[#id910984][60]]]} The =iter()= function is covered in [[file:ch14.html][Chapter 14]], along with the =__iter__= method.
+
+
+^{[[[#id678206][61]]]} Attribute lookup is more complicated than this; we'll see the gory details in [[file:pt06.html][Part VI]]. For now, this simplified explanation will do.
+
+
+^{[[[#id644472][62]]]} The =sum=, =any=, and =all= cover the most common uses of =reduce=. See the discussion in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]].
+
+
+^{[[[#id825039][63]]]} We'll seriously consider the matter of =Vector([1, 2]) == (1, 2)= in [[file:ch13.html#op_overloading_101_sec][Operator Overloading 101]].
+
+
+^{[[[#id417771][64]]]} That's surprising (to me, at least). I think =zip= should raise =ValueError= if the sequences are not all of the same length, which is what happens when unpacking an iterable to a tuple of variables of different length.
+
+
+^{[[[#id540042][65]]]} The Wolfram Mathworld site has an article on [[http://mathworld.wolfram.com/Hypersphere.html][Hypersphere]]; on Wikipedia, “hypersphere” redirects to [[http://en.wikipedia.org/wiki/N-sphere][the "/n/-sphere” entry]].
+
+
+^{[[[#id432810][66]]]} I adapted the code for this presentation: in 2003, =reduce= was a built-in, but in Python 3 we need to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+
+][60]]]} The =iter()= function is covered in [[file:ch14.html][Chapter 14]], along with the =__iter__= method.
+
+
+^{[[[#id678206][61]]]} Attribute lookup is more complicated than this; we'll see the gory details in [[file:pt06.html][Part VI]]. For now, this simplified explanation will do.
+
+
+^{[[[#id644472][62]]]} The =sum=, =any=, and =all= cover the most common uses of =reduce=. See the discussion in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]].
+
+
+^{[[[#id825039][63]]]} We'll seriously consider the matter of =Vector([1, 2]) == (1, 2)= in [[file:ch13.html#op_overloading_101_sec][Operator Overloading 101]].
+
+
+^{[[[#id417771][64]]]} That's surprising (to me, at least). I think =zip= should raise =ValueError= if the sequences are not all of the same length, which is what happens when unpacking an iterable to a tuple of variables of different length.
+
+
+^{[[[#id540042][65]]]} The Wolfram Mathworld site has an article on [[http://mathworld.wolfram.com/Hypersphere.html][Hypersphere]]; on Wikipedia, “hypersphere” redirects to [[http://en.wikipedia.org/wiki/N-sphere][the "/n/-sphere” entry]].
+
+
+^{[[[#id432810][66]]]} I adapted the code for this presentation: in 2003, =reduce= was a built-in, but in Python 3 we need to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+
+ to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+
+own method. Here is what =help(slice.indices)= reveals:
+
+-  =S.indices(len) -> (start, stop, stride)=  :: Assuming a sequence of length =len=, calculate the =start= and =stop= indices, and the =stride= length of the extended slice described by =S=. Out of bounds indices are clipped in a manner consistent with the handling of normal slices.
+
+In other words, =indices= exposes the tricky logic that's implemented in the built-in sequences to gracefully handle missing or negative indices and slices that are longer than the target sequence. This method produces “normalized” tuples of nonnegative =start=, =stop=, and =stride= integers adjusted to fit within the bounds of a sequence of the given length.
+
+Here are a couple of examples, considering a sequence of =len == 5=, e.g., ='ABCDE'=:
+
+#+BEGIN_EXAMPLE
+    >>> slice(None, 10, 2).indices(5)  # 
+    (0, 5, 2)
+    >>> slice(-3, None, None).indices(5)  # 
+    (2, 5, 1)
+#+END_EXAMPLE
+
+- [[#CO112-1][[[file:callouts/1.png]]]]  :: ='ABCDE'[:10:2]= is the same as ='ABCDE'[0:5:2]=
+
+- [[#CO112-2][[[file:callouts/2.png]]]]  :: ='ABCDE'[-3:]= is the same as ='ABCDE'[2:5:1]=
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note
+    :CLASS: title
+    :END:
+
+As I write this, the =slice.indices= method is apparently not documented in the online Python Library Reference. The Python Python/C API Reference Manual documents a similar C-level function, [[https://docs.python.org/3/c-api/slice.html#c.PySlice_GetIndicesEx][PySlice_GetIndicesEx]]. I discovered =slice.indices= while exploring slice objects in the Python console, using =dir()= and =help()=. Yet another evidence of the value of the interactive console as a discovery tool.
+
+In our =Vector= code, we'll not need the =slice.indices()= method because when we get a slice argument we'll delegate its handling to the =_components= =array=. But if you can't count on the services of an underlying sequence, this method can be a huge time saver.
+
+Now that we know how to handle slices, let's take a look at the improved =Vector.__getitem__= implementation.
+
+*** A Slice-Aware __getitem__
+    :PROPERTIES:
+    :CUSTOM_ID: _a_slice_aware_x5f_x5f_getitem_x5f_x5f
+    :CLASS: title
+    :END:
+
+[[file:ch10.html#ex_vector_v2][Example 10-6]] lists the two methods needed to make =Vector= behave as a sequence: =__len__= and =__getitem__= (the latter now implemented to handle slicing correctly).
+
+
+
+Example 10-6. Part of vector_v2.py: __len__ and __getitem__ methods added to Vector class from vector_v1.py (see [[file:ch10.html#ex_vector_v1][Example 10-2]])
+
+#+BEGIN_EXAMPLE
+        def __len__(self):
+            return len(self._components)
+
+        def __getitem__(self, index):
+            cls = type(self)   
+            if isinstance(index, slice):   
+                return cls(self._components[index])   
+            elif isinstance(index, numbers.Integral):   
+                return self._components[index]   
+            else:
+                msg = '{cls.__name__} indices must be integers'
+                raise TypeError(msg.format(cls=cls))   
+#+END_EXAMPLE
+
+- [[#CO113-1][[[file:callouts/1.png]]]]  :: Get the class of the instance (i.e., =Vector=) for later use.
+
+- [[#CO113-2][[[file:callouts/2.png]]]]  :: If the =index= argument is a =slice=...
+
+- [[#CO113-3][[[file:callouts/3.png]]]]  :: ...invoke the class to build another =Vector= instance from a slice of the =_components= array.
+
+- [[#CO113-4][[[file:callouts/4.png]]]]  :: If the =index= is an =int= or some other kind of integer...
+
+- [[#CO113-5][[[file:callouts/5.png]]]]  :: ...just return the specific item from =_components=.
+
+- [[#CO113-6][[[file:callouts/6.png]]]]  :: Otherwise, raise an exception.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-1
+    :CLASS: title
+    :END:
+
+Excessive use of =isinstance= may be a sign of bad OO design, but handling slices in =__getitem__= is a justified use case. Note in [[file:ch10.html#ex_vector_v2][Example 10-6]] the test against =numbers.Integral=---an Abstract Base Class. Using ABCs in =insinstance= tests makes an API more flexible and future-proof. [[file:ch11.html][Chapter 11]] explains why. Unfortunately, there is no ABC for =slice= in the Python 3.4 standard library.
+
+To discover which exception to raise in the =else= clause of =__getitem__=, I used the interactive console to check the result of ='ABC'[1, 2]=. I then learned that Python raises a =TypeError=, and I also copied the wording from the error message: “indices must be integers.” To create Pythonic objects, mimic Python's own objects.
+
+Once the code in [[file:ch10.html#ex_vector_v2][Example 10-6]] is added to the =Vector= class, we have proper slicing behavior, as [[file:ch10.html#ex_vector_v2_demo][Example 10-7]] demonstrates.
+
+
+
+Example 10-7. Tests of enhanced Vector./getitem/ from [[file:ch10.html#ex_vector_v2][Example 10-6]]
+
+#+BEGIN_EXAMPLE
+        >>> v7 = Vector(range(7))
+        >>> v7[-1]   
+        6.0
+        >>> v7[1:4]   
+        Vector([1.0, 2.0, 3.0])
+        >>> v7[-1:]   
+        Vector([6.0])
+        >>> v7[1,2]   
+        Traceback (most recent call last):
+          ...
+        TypeError: Vector indices must be integers
+#+END_EXAMPLE
+
+- [[#CO114-1][[[file:callouts/1.png]]]]  :: An integer index retrieves just one component value as a =float=.
+
+- [[#CO114-2][[[file:callouts/2.png]]]]  :: A slice index creates a new =Vector=.
+
+- [[#CO114-3][[[file:callouts/3.png]]]]  :: A slice of =len == 1= also creates a =Vector=.
+
+- [[#CO114-4][[[file:callouts/4.png]]]]  :: =Vector= does not support multidimensional indexing, so a tuple of indices or slices raises an error.
+
+** Vector Take #3: Dynamic Attribute Access
+
+
+In the evolution from =Vector2d= to =Vector=, we lost the ability to access vector components by name (e.g., =v.x=, =v.y=). We are now dealing with vectors that may have a large number of components. Still, it may be convenient to access the first few components with shortcut letters such as =x=, =y=, =z= instead of =v[0]=, =v[1]= and =v[2]=.
+
+Here is the alternative syntax we want to provide for reading the first four components of a vector:
+
+#+BEGIN_EXAMPLE
+    >>> v = Vector(range(10))
+    >>> v.x
+    0.0
+    >>> v.y, v.z, v.t
+    (1.0, 2.0, 3.0)
+#+END_EXAMPLE
+
+In =Vector2d=, we provided read-only access to =x= and =y= using the =@property= decorator ([[file:ch09.html#ex_vector2d_v3][Example 9-7]]). We could write four properties in =Vector=, but it would be tedious. The =__getattr__= special method provides a better way.
+
+“The =__getattr__= method is invoked by the interpreter when attribute lookup fails. In simple terms, given the expression =my_obj.x=, Python checks if the =my_obj= instance has an attribute named =x=; if not, the search goes to the class (=my_obj.__class__=), and then up the inheritance graph.^{[[[#ftn.id678206][61]]]} If the =x= attribute is not found, then the =__getattr__= method defined in the class of =my_obj= is called with =self= and the name of the attribute as a string (e.g., ='x'=).
+
+[[file:ch10.html#ex_vector_v3_getattr][Example 10-8]] lists our =__getattr__= method. Essentially it checks whether the attribute being sought is one of the letters =xyzt= and if so, returns the corresponding vector component.
+
+
+
+Example 10-8. Part of vector_v3.py: __getattr__ method added to Vector class from vector_v2.py
+
+#+BEGIN_EXAMPLE
+        shortcut_names = 'xyzt'
+
+        def __getattr__(self, name):
+            cls = type(self)   
+            if len(name) == 1:   
+                pos = cls.shortcut_names.find(name)   
+                if 0 <= pos < len(self._components):   
+                    return self._components[pos]
+            msg = '{.__name__!r} object has no attribute {!r}'   
+            raise AttributeError(msg.format(cls, name))
+#+END_EXAMPLE
+
+- [[#CO115-1][[[file:callouts/1.png]]]]  :: Get the =Vector= class for later use.
+
+- [[#CO115-2][[[file:callouts/2.png]]]]  :: If the name is one character, it may be one of the =shortcut_names=.
+
+- [[#CO115-3][[[file:callouts/3.png]]]]  :: Find position of 1-letter name; =str.find= would also locate ='yz'= and we don't want that, this is the reason for the test above.
+
+- [[#CO115-4][[[file:callouts/4.png]]]]  :: If the position is within range, return the array element.
+
+- [[#CO115-5][[[file:callouts/5.png]]]]  :: If either test failed, raise =AttributeError= with a standard message text.
+
+It's not hard to implement =__getattr__=, but in this case it's not enough. Consider the bizarre interaction in [[file:ch10.html#ex_vector_v3_getattr_bug][Example 10-9]].
+
+
+
+Example 10-9. Inappropriate behavior: assigning to v.x raises no error, but introduces an inconsistency
+
+#+BEGIN_EXAMPLE
+    >>> v = Vector(range(5))
+    >>> v
+    Vector([0.0, 1.0, 2.0, 3.0, 4.0])
+    >>> v.x  # 
+    0.0
+    >>> v.x = 10  # 
+    >>> v.x  # 
+    10
+    >>> v
+    Vector([0.0, 1.0, 2.0, 3.0, 4.0])  # 
+#+END_EXAMPLE
+
+- [[#CO116-1][[[file:callouts/1.png]]]]  :: Access element =v[0]= as =v.x=.
+
+- [[#CO116-2][[[file:callouts/2.png]]]]  :: Assign new value to =v.x=. This should raise an exception.
+
+- [[#CO116-3][[[file:callouts/3.png]]]]  :: Reading =v.x= shows the new value, =10=.
+
+- [[#CO116-4][[[file:callouts/4.png]]]]  :: However, the vector components did not change.
+
+Can you explain what is happening? In particular, why the second time =v.x= returns =10= if that value is not in the vector components array? If you don't know right off the bat, study the explanation of =__getattr__= given right before [[file:ch10.html#ex_vector_v3_getattr][Example 10-8]]. It's a bit subtle, but a very important foundation to understand a lot of what comes later in the book.
+
+The inconsistency in [[file:ch10.html#ex_vector_v3_getattr_bug][Example 10-9]] was introduced because of the way =__getattr__= works: Python only calls that method as a fall back, when the object does not have the named attribute. However, after we assign =v.x = 10=, the =v= object now has an =x= attribute, so =__getattr__= will no longer be called to retrieve =v.x=: the interpreter will just return the value =10= that is bound to =v.x=. On the other hand, our implementation of =__getattr__= pays no attention to instance attributes other than =self._components=, from where it retrieves the values of the “virtual attributes” listed in =shortcut_names=.
+
+We need to customize the logic for setting attributes in our =Vector= class in order to avoid this inconsistency.
+
+Recall that in the latest =Vector2d= examples from [[file:ch09.html][Chapter 9]], trying to assign to the =.x= or =.y= instance attributes raised =AttributeError=. In =Vector= we want the same exception with any attempt at assigning to all single-letter lowercase attribute names, just to avoid confusion. To do that, we'll implement =__setattr__= as listed in [[file:ch10.html#ex_vector_v3_setattr][Example 10-10]].
+
+
+
+Example 10-10. Part of vector_v3.py: __setattr__ method in Vector class
+
+#+BEGIN_EXAMPLE
+        def __setattr__(self, name, value):
+            cls = type(self)
+            if len(name) == 1:   
+                if name in cls.shortcut_names:   
+                    error = 'readonly attribute {attr_name!r}'
+                elif name.islower():   
+                    error = "can't set attributes 'a' to 'z' in {cls_name!r}"
+                else:
+                    error = ''   
+                if error:   
+                    msg = error.format(cls_name=cls.__name__, attr_name=name)
+                    raise AttributeError(msg)
+            super().__setattr__(name, value)   
+#+END_EXAMPLE
+
+- [[#CO117-1][[[file:callouts/1.png]]]]  :: Special handling for single-character attribute names.
+
+- [[#CO117-2][[[file:callouts/2.png]]]]  :: If =name= is one of =xyzt=, set specific error message.
+
+- [[#CO117-3][[[file:callouts/3.png]]]]  :: If =name= is lowercase, set error message about all single-letter names.
+
+- [[#CO117-4][[[file:callouts/4.png]]]]  :: Otherwise, set blank error message.
+
+- [[#CO117-5][[[file:callouts/5.png]]]]  :: If there is a nonblank error message, raise =AttributeError=.
+
+- [[#CO117-6][[[file:callouts/6.png]]]]  :: Default case: call =__setattr__= on superclass for standard behavior.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-1
+    :CLASS: title
+    :END:
+
+The =super()= function provides a way to access methods of superclasses dynamically, a necessity in a dynamic language supporting multiple inheritance like Python. It's used to delegate some task from a method in a subclass to a suitable method in a superclass, as seen in [[file:ch10.html#ex_vector_v3_setattr][Example 10-10]]. There is more about =super= in [[file:ch12.html#mro_section][Multiple Inheritance and Method Resolution Order]].
+
+While choosing the error message to display with =AttributeError=, my first check was the behavior of the built-in =complex= type, because they are immutable and have a pair of data attributes =real= and =imag=. Trying to change either of those in a =complex= instance raises =AttributeError= with the message ="can't set attribute"=. On the other hand, trying to set a read-only attribute protected by a property as we did in [[file:ch09.html#hashable_vector2d][A Hashable Vector2d]] produces the message ="readonly attribute"=. I drew inspiration from both wordings to set the =error= string in =__setitem__=, but was more explicit about the forbidden attributes.
+
+Note that we are not disallowing setting all attributes, only single-letter, lowercase ones, to avoid confusion with the supported read-only attributes =x=, =y=, =z=, and =t=.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-1
+    :CLASS: title
+    :END:
+
+Knowing that declaring =__slots__= at the class level prevents setting new instance attributes, it's tempting to use that feature instead of implementing =__setattr__= as we did. However, because of all the caveats discussed in [[file:ch09.html#problems_with_slots][The Problems with __slots__]], using =__slots__= just to prevent instance attribute creation is not recommended. =__slots__= should be used only to save memory, and only if that is a real issue.
+
+Even without supporting writing to the =Vector= components, here is an important takeaway from this example: very often when you implement =__getattr__= you need to code =__setattr__= as well, to avoid inconsistent behavior in your objects.
+
+If we wanted to allow changing components, we could implement =__setitem__= to enable =v[0] = 1.1= and/or =__setattr__= to make =v.x = 1.1= work. But =Vector= will remain immutable because we want to make it hashable in the coming section.
+
+** Vector Take #4: Hashing and a Faster ==
+
+
+Once more we get to implement a =__hash__= method. Together with the existing =__eq__=, this will make =Vector= instances hashable.
+
+The =__hash__= in [[file:ch09.html#ex_vector2d_v3_hash][Example 9-8]] simply computed =hash(self.x) ^ hash(self.y)=. We now would like to apply the =^= (xor) operator to the hashes of every component, in succession, like this: =v[0] ^ v[1] ^ v[2]=.... That is what the =functools.reduce= function is for. Previously I said that =reduce= is not as popular as before,^{[[[#ftn.id644472][62]]]} but computing the hash of all vector components is a perfect job for it. [[file:ch10.html#reduce_fig][Figure 10-1]] depicts the general idea of the =reduce= function.
+
+
+
+[[file:images/flup_1001.png]]
+
+Figure 10-1. Reducing functions---reduce, sum, any, all---produce a single aggregate result from a sequence or from any finite iterable object.
+
+So far we've seen that =functools.reduce()= can be replaced by =sum()=, but now let's properly explain how it works. The key idea is to reduce a series of values to a single value. The first argument to =reduce()= is a two-argument function, and the second argument is an iterable. Let's say we have a two-argument function =fn= and a list =lst=. When you call =reduce(fn, lst)=, =fn= will be applied to the first pair of elements---=fn(lst[0], lst[1])=---producing a first result, =r1=. Then =fn= is applied to =r1= and the next element---=fn(r1, lst[2])=---producing a second result, =r2=. Now =fn(r2, lst[3])= is called to produce =r3= ... and so on until the last element, when a single result, =rN=, is returned.
+
+Here is how you could use =reduce= to compute 5! (the factorial of 5):
+
+#+BEGIN_EXAMPLE
+    >>> 2 * 3 * 4 * 5  # the result we want: 5! == 120
+    120
+    >>> import functools
+    >>> functools.reduce(lambda a,b: a*b, range(1, 6))
+    120
+#+END_EXAMPLE
+
+Back to our hashing problem, [[file:ch10.html#ex_reduce_xor][Example 10-11]] shows the idea of computing the aggregate xor by doing it in three ways: with a =for= loop and two =reduce= calls.
+
+
+
+Example 10-11. Three ways of calculating the accumulated xor of integers from 0 to 5
+
+#+BEGIN_EXAMPLE
+    >>> n = 0
+    >>> for i in range(1, 6):  # 
+    ...     n ^= i
+    ...
+    >>> n
+    1
+    >>> import functools
+    >>> functools.reduce(lambda a, b: a^b, range(6))  # 
+    1
+    >>> import operator
+    >>> functools.reduce(operator.xor, range(6))  # 
+    1
+#+END_EXAMPLE
+
+- [[#CO118-1][[[file:callouts/1.png]]]]  :: Aggregate xor with a =for= loop and an accumulator variable.
+
+- [[#CO118-2][[[file:callouts/2.png]]]]  :: =functools.reduce= using an anonymous function.
+
+- [[#CO118-3][[[file:callouts/3.png]]]]  :: =functools.reduce= replacing custom =lambda= with =operator.xor=.
+
+From the alternatives in [[file:ch10.html#ex_reduce_xor][Example 10-11]], the last one is my favorite, and the =for= loop comes second. What is your preference?
+
+As seen in [[file:ch05.html#operator_module_section][The operator Module]], =operator= provides the functionality of all Python infix operators in function form, lessening the need for =lambda=.
+
+To code =Vector.__hash__= in my preferred style, we need to import the =functools= and =operator= modules. [[file:ch10.html#ex_vector_v4][Example 10-12]] shows the relevant changes.
+
+
+
+Example 10-12. Part of vector_v4.py: two imports and __hash__ method added to Vector class from vector_v3.py
+
+#+BEGIN_EXAMPLE
+    from array import array
+    import reprlib
+    import math
+    import functools  # 
+    import operator  # 
+
+
+    class Vector:
+        typecode = 'd'
+
+        # many lines omitted in book listing...
+
+        def __eq__(self, other):  # 
+            return tuple(self) == tuple(other)
+
+        def __hash__(self):
+            hashes = (hash(x) for x in self._components)  # 
+            return functools.reduce(operator.xor, hashes, 0)  # 
+
+        # more lines omitted...
+#+END_EXAMPLE
+
+- [[#CO119-1][[[file:callouts/1.png]]]]  :: Import =functools= to use =reduce=.
+
+- [[#CO119-2][[[file:callouts/2.png]]]]  :: Import =operator= to use =xor=.
+
+- [[#CO119-3][[[file:callouts/3.png]]]]  :: No change to =__eq__=; I listed it here because it's good practice to keep =__eq__= and =__hash__= close in source code, because they need to work together.
+
+- [[#CO119-4][[[file:callouts/4.png]]]]  :: Create a generator expression to lazily compute the hash of each component.
+
+- [[#CO119-5][[[file:callouts/5.png]]]]  :: Feed =hashes= to =reduce= with the =xor= function to compute the aggregate hash value; the third argument, =0=, is the initializer (see next warning).
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-2
+    :CLASS: title
+    :END:
+
+When using =reduce=, it's good practice to provide the third argument, =reduce(function, iterable, initializer)=, to prevent this exception: =TypeError: reduce() of empty sequence with no initial value= (excellent message: explains the problem and how to fix it). The =initializer= is the value returned if the sequence is empty and is used as the first argument in the reducing loop, so it should be the identity value of the operation. As examples, for =+=, =|=, =^= the =initializer= should be =0=, but for =*=, =&= it should be =1=.
+
+As implemented, the =__hash__= method in [[file:ch10.html#ex_vector_v3_getattr][Example 10-8]] is a perfect example of a map-reduce computation ([[file:ch10.html#map_reduce_fig][Figure 10-2]]).
+
+
+
+[[file:images/flup_1002.png]]
+
+Figure 10-2. Map-reduce: apply function to each item to generate a new series (map), then compute aggregate (reduce)
+
+The mapping step produces one hash for each component, and the reduce step aggregates all hashes with the =xor= operator. Using =map= instead of a /genexp/ makes the mapping step even more visible:
+
+#+BEGIN_EXAMPLE
+        def __hash__(self):
+            hashes = map(hash, self._components)
+            return functools.reduce(operator.xor, hashes)
+#+END_EXAMPLE
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-2
+    :CLASS: title
+    :END:
+
+The solution with =map= would be less efficient in Python 2, where the =map= function builds a new =list= with the results. But in Python 3, =map= is lazy: it creates a generator that yields the results on demand, thus saving memory---just like the generator expression we used in the =__hash__= method of [[file:ch10.html#ex_vector_v3_getattr][Example 10-8]].
+
+While we are on the topic of reducing functions, we can replace our quick implementation of =__eq__= with another one that will be cheaper in terms of processing and memory, at least for large vectors. As introduced in [[file:ch09.html#ex_vector2d_v0][Example 9-2]], we have this very concise implementation of =__eq__=:
+
+#+BEGIN_EXAMPLE
+        def __eq__(self, other):
+            return tuple(self) == tuple(other)
+#+END_EXAMPLE
+
+This works for =Vector2d= and for =Vector=---it even considers =Vector([1, 2])= equal to =(1, 2)=, which may be a problem, but we'll overlook that for now.^{[[[#ftn.id825039][63]]]} But for =Vector= instances that may have thousands of components, it's very inefficient. It builds two tuples copying the entire contents of the operands just to use the =__eq__= of the =tuple= type. For =Vector2d= (with only two components), it's a good shortcut, but not for the large multidimensional vectors. A better way of comparing one =Vector= to another =Vector= or iterable would be [[file:ch10.html#ex_eq_loop][Example 10-13]].
+
+
+
+Example 10-13. Vector./eq/ using zip in a for loop for more efficient comparison
+
+#+BEGIN_EXAMPLE
+        def __eq__(self, other):
+            if len(self) != len(other):  # 
+                return False
+            for a, b in zip(self, other):  # 
+                if a != b:  # 
+                    return False
+            return True  # 
+#+END_EXAMPLE
+
+- [[#CO120-1][[[file:callouts/1.png]]]]  :: If the =len= of the objects are different, they are not equal.
+
+- [[#CO120-2][[[file:callouts/2.png]]]]  :: =zip= produces a generator of tuples made from the items in each iterable argument. See [[file:ch10.html#zip_box][The Awesome zip]] if =zip= is new to you. The =len= comparison above is needed because =zip= stops producing values without warning as soon as one of the inputs is exhausted.
+
+- [[#CO120-3][[[file:callouts/3.png]]]]  :: As soon as two components are different, exit returning =False=.
+
+- [[#CO120-4][[[file:callouts/4.png]]]]  :: Otherwise, the objects are equal.
+
+[[file:ch10.html#ex_eq_loop][Example 10-13]] is efficient, but the =all= function can produce the same aggregate computation of the =for= loop in one line: if all comparisons between corresponding components in the operands are =True=, the result is =True=. As soon as one comparison is =False=, =all= returns =False=. [[file:ch10.html#ex_eq_all][Example 10-14]] shows how =__eq__= looks using =all=.
+
+
+
+Example 10-14. Vector./eq/ using zip and all: same logic as [[file:ch10.html#ex_eq_loop][Example 10-13]]
+
+#+BEGIN_EXAMPLE
+        def __eq__(self, other):
+            return len(self) == len(other) and all(a == b for a, b in zip(self, other))
+#+END_EXAMPLE
+
+Note that we first check that the operands have equal length, because =zip= will stop at the shortest operand.
+
+[[file:ch10.html#ex_eq_all][Example 10-14]] is the implementation we choose for =__eq__= in /vector_v4.py/.
+
+We wrap up this chapter by bringing back the =__format__= method from =Vector2d= to =Vector=.
+
+
+
+The Awesome zip
+
+Having a =for= loop that iterates over items without fiddling with index variables is great and prevents lots of bugs, but demands some special utility functions. One of them is the =zip= built-in, which makes it easy to iterate in parallel over two or more iterables by returning tuples that you can unpack into variables, one for each item in the parallel inputs. See [[file:ch10.html#zip_demo][Example 10-15]].
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-3
+    :CLASS: title
+    :END:
+
+The =zip= function is named after the zipper fastener because the physical device works by interlocking pairs of teeth taken from both zipper sides, a good visual analogy for what =zip(left, right)= does. No relation with compressed files.
+
+
+
+Example 10-15. The zip built-in at work
+
+#+BEGIN_EXAMPLE
+    >>> zip(range(3), 'ABC')  # 
+    <zip object at 0x10063ae48>
+    >>> list(zip(range(3), 'ABC'))  # 
+    [(0, 'A'), (1, 'B'), (2, 'C')]
+    >>> list(zip(range(3), 'ABC', [0.0, 1.1, 2.2, 3.3]))  # 
+    [(0, 'A', 0.0), (1, 'B', 1.1), (2, 'C', 2.2)]
+    >>> from itertools import zip_longest  # 
+    >>> list(zip_longest(range(3), 'ABC', [0.0, 1.1, 2.2, 3.3], fillvalue=-1))
+    [(0, 'A', 0.0), (1, 'B', 1.1), (2, 'C', 2.2), (-1, -1, 3.3)]
+#+END_EXAMPLE
+
+- [[#CO121-1][[[file:callouts/1.png]]]]  :: =zip= returns a generator that produces tuples on demand.
+
+- [[#CO121-2][[[file:callouts/2.png]]]]  :: Here we build a =list= from it just for display; usually we iterate over the generator.
+
+- [[#CO121-3][[[file:callouts/3.png]]]]  :: =zip= has a surprising trait: it stops without warning when one of the iterables is exhausted.^{[[[#ftn.id417771][64]]]}
+
+- [[#CO121-4][[[file:callouts/4.png]]]]  :: The =itertools.zip_longest= function behaves differently: it uses an optional =fillvalue= (=None= by default) to complete missing values so it can generate tuples until the last iterable is exhausted.
+
+The =enumerate= built-in is another generator function often used in =for= loops to avoid manual handling of index variables. If you are not familiar with =enumerate=, you should definitely check it out in the [[http://bit.ly/1QOtsk8][“Built-in functions” documentation]]. The =zip= and =enumerate= built-ins, along with several other generator functions in the standard library, are covered in [[file:ch14.html#stdlib_generators][Generator Functions in the Standard Library]].
+
+** Vector Take #5: Formatting
+
+
+The =__format__= method of =Vector= will resemble that of =Vector2d=, but instead of providing a custom display in polar coordinates, =Vector= will use spherical coordinates---also known as “hyperspherical” coordinates, because now we support /n/ dimensions, and spheres are “hyperspheres” in 4D and beyond.^{[[[#ftn.id540042][65]]]} Accordingly, we'll change the custom format suffix from ='p'= to ='h'=.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-4
+    :CLASS: title
+    :END:
+
+As we saw in [[file:ch09.html#format_display_sec][Formatted Displays]], when extending the [[https://docs.python.org/3/library/string.html#formatspec][Format Specification Mini-Language]] it's best to avoid reusing format codes supported by built-in types. In particular, our extended mini-language also uses the float formatting codes ='eEfFgGn%'= in their original meaning, so we definitely must avoid these. Integers use ='bcdoxXn'= and strings use ='s'=. I picked ='p'= for =Vector2d= polar coordinates. Code ='h'= for hyperspherical coordinates is a good choice.
+
+For example, given a =Vector= object in 4D space (=len(v) == 4=), the ='h'= code will produce a display like =<r, Φ₁, Φ₂, Φ₃>= where =r= is the magnitude (=abs(v)=) and the remaining numbers are the angular coordinates Φ₁, Φ₂, Φ₃.
+
+Here are some samples of the spherical coordinate format in 4D, taken from the doctests of /vector_v5.py/ (see [[file:ch10.html#ex_vector_v5][Example 10-16]]):
+
+#+BEGIN_EXAMPLE
+    >>> format(Vector([-1, -1, -1, -1]), 'h')
+    '<2.0, 2.0943951023931957, 2.186276035465284, 3.9269908169872414>'
+    >>> format(Vector([2, 2, 2, 2]), '.3eh')
+    '<4.000e+00, 1.047e+00, 9.553e-01, 7.854e-01>'
+    >>> format(Vector([0, 1, 0, 0]), '0.5fh')
+    '<1.00000, 1.57080, 0.00000, 0.00000>'
+#+END_EXAMPLE
+
+Before we can implement the minor changes required in =__format__=, we need to code a pair of support methods: =angle(n)= to compute one of the angular coordinates (e.g., Φ₁), and =angles()= to return an iterable of all angular coordinates. I'll not describe the math here; if you're curious, Wikipedia's [[http://en.wikipedia.org/wiki/N-sphere]["/n/-sphere” entry]] has the formulas I used to calculate the spherical coordinates from the Cartesian coordinates in the =Vector= components array.
+
+[[file:ch10.html#ex_vector_v5][Example 10-16]] is a full listing of /vector_v5.py/ consolidating all we've implemented since [[file:ch10.html#vector_take1_sec][Vector Take #1: Vector2d Compatible]] and introducing custom formatting.
+
+
+
+Example 10-16. vector_v5.py: doctests and all code for final Vector class; callouts highlight additions needed to support __format__
+
+#+BEGIN_EXAMPLE
+    """
+    A multidimensional ``Vector`` class, take 5
+
+    A ``Vector`` is built from an iterable of numbers::
+
+        >>> Vector([3.1, 4.2])
+        Vector([3.1, 4.2])
+        >>> Vector((3, 4, 5))
+        Vector([3.0, 4.0, 5.0])
+        >>> Vector(range(10))
+        Vector([0.0, 1.0, 2.0, 3.0, 4.0, ...])
+
+
+    Tests with two dimensions (same results as ``vector2d_v1.py``)::
+
+        >>> v1 = Vector([3, 4])
+        >>> x, y = v1
+        >>> x, y
+        (3.0, 4.0)
+        >>> v1
+        Vector([3.0, 4.0])
+        >>> v1_clone = eval(repr(v1))
+        >>> v1 == v1_clone
+        True
+        >>> print(v1)
+        (3.0, 4.0)
+        >>> octets = bytes(v1)
+        >>> octets
+        b'dx00x00x00x00x00x00x08@x00x00x00x00x00x00x10@'
+        >>> abs(v1)
+        5.0
+        >>> bool(v1), bool(Vector([0, 0]))
+        (True, False)
+
+
+    Test of ``.frombytes()`` class method:
+
+        >>> v1_clone = Vector.frombytes(bytes(v1))
+        >>> v1_clone
+        Vector([3.0, 4.0])
+        >>> v1 == v1_clone
+        True
+
+
+    Tests with three dimensions::
+
+        >>> v1 = Vector([3, 4, 5])
+        >>> x, y, z = v1
+        >>> x, y, z
+        (3.0, 4.0, 5.0)
+        >>> v1
+        Vector([3.0, 4.0, 5.0])
+        >>> v1_clone = eval(repr(v1))
+        >>> v1 == v1_clone
+        True
+        >>> print(v1)
+        (3.0, 4.0, 5.0)
+        >>> abs(v1)  # doctest:+ELLIPSIS
+        7.071067811...
+        >>> bool(v1), bool(Vector([0, 0, 0]))
+        (True, False)
+
+
+    Tests with many dimensions::
+
+        >>> v7 = Vector(range(7))
+        >>> v7
+        Vector([0.0, 1.0, 2.0, 3.0, 4.0, ...])
+        >>> abs(v7)  # doctest:+ELLIPSIS
+        9.53939201...
+
+
+    Test of ``.__bytes__`` and ``.frombytes()`` methods::
+
+        >>> v1 = Vector([3, 4, 5])
+        >>> v1_clone = Vector.frombytes(bytes(v1))
+        >>> v1_clone
+        Vector([3.0, 4.0, 5.0])
+        >>> v1 == v1_clone
+        True
+
+
+    Tests of sequence behavior::
+
+        >>> v1 = Vector([3, 4, 5])
+        >>> len(v1)
+        3
+        >>> v1[0], v1[len(v1)-1], v1[-1]
+        (3.0, 5.0, 5.0)
+
+
+    Test of slicing::
+
+        >>> v7 = Vector(range(7))
+        >>> v7[-1]
+        6.0
+        >>> v7[1:4]
+        Vector([1.0, 2.0, 3.0])
+        >>> v7[-1:]
+        Vector([6.0])
+        >>> v7[1,2]
+        Traceback (most recent call last):
+          ...
+        TypeError: Vector indices must be integers
+
+
+    Tests of dynamic attribute access::
+
+        >>> v7 = Vector(range(10))
+        >>> v7.x
+        0.0
+        >>> v7.y, v7.z, v7.t
+        (1.0, 2.0, 3.0)
+
+    Dynamic attribute lookup failures::
+
+        >>> v7.k
+        Traceback (most recent call last):
+          ...
+        AttributeError: 'Vector' object has no attribute 'k'
+        >>> v3 = Vector(range(3))
+        >>> v3.t
+        Traceback (most recent call last):
+          ...
+        AttributeError: 'Vector' object has no attribute 't'
+        >>> v3.spam
+        Traceback (most recent call last):
+          ...
+        AttributeError: 'Vector' object has no attribute 'spam'
+
+
+    Tests of hashing::
+
+        >>> v1 = Vector([3, 4])
+        >>> v2 = Vector([3.1, 4.2])
+        >>> v3 = Vector([3, 4, 5])
+        >>> v6 = Vector(range(6))
+        >>> hash(v1), hash(v3), hash(v6)
+        (7, 2, 1)
+
+
+    Most hash values of non-integers vary from a 32-bit to 64-bit CPython build::
+
+        >>> import sys
+        >>> hash(v2) == (384307168202284039 if sys.maxsize > 2**32 else 357915986)
+        True
+
+
+    Tests of ``format()`` with Cartesian coordinates in 2D::
+
+        >>> v1 = Vector([3, 4])
+        >>> format(v1)
+        '(3.0, 4.0)'
+        >>> format(v1, '.2f')
+        '(3.00, 4.00)'
+        >>> format(v1, '.3e')
+        '(3.000e+00, 4.000e+00)'
+
+
+    Tests of ``format()`` with Cartesian coordinates in 3D and 7D::
+
+        >>> v3 = Vector([3, 4, 5])
+        >>> format(v3)
+        '(3.0, 4.0, 5.0)'
+        >>> format(Vector(range(7)))
+        '(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0)'
+
+
+    Tests of ``format()`` with spherical coordinates in 2D, 3D and 4D::
+
+        >>> format(Vector([1, 1]), 'h')  # doctest:+ELLIPSIS
+        '<1.414213..., 0.785398...>'
+        >>> format(Vector([1, 1]), '.3eh')
+        '<1.414e+00, 7.854e-01>'
+        >>> format(Vector([1, 1]), '0.5fh')
+        '<1.41421, 0.78540>'
+        >>> format(Vector([1, 1, 1]), 'h')  # doctest:+ELLIPSIS
+        '<1.73205..., 0.95531..., 0.78539...>'
+        >>> format(Vector([2, 2, 2]), '.3eh')
+        '<3.464e+00, 9.553e-01, 7.854e-01>'
+        >>> format(Vector([0, 0, 0]), '0.5fh')
+        '<0.00000, 0.00000, 0.00000>'
+        >>> format(Vector([-1, -1, -1, -1]), 'h')  # doctest:+ELLIPSIS
+        '<2.0, 2.09439..., 2.18627..., 3.92699...>'
+        >>> format(Vector([2, 2, 2, 2]), '.3eh')
+        '<4.000e+00, 1.047e+00, 9.553e-01, 7.854e-01>'
+        >>> format(Vector([0, 1, 0, 0]), '0.5fh')
+        '<1.00000, 1.57080, 0.00000, 0.00000>'
+    """
+
+    from array import array
+    import reprlib
+    import math
+    import numbers
+    import functools
+    import operator
+    import itertools   
+
+
+    class Vector:
+        typecode = 'd'
+
+        def __init__(self, components):
+            self._components = array(self.typecode, components)
+
+        def __iter__(self):
+            return iter(self._components)
+
+        def __repr__(self):
+            components = reprlib.repr(self._components)
+            components = components[components.find('['):-1]
+            return 'Vector({})'.format(components)
+
+        def __str__(self):
+            return str(tuple(self))
+
+        def __bytes__(self):
+            return (bytes([ord(self.typecode)]) +
+                    bytes(self._components))
+
+        def __eq__(self, other):
+            return (len(self) == len(other) and
+                    all(a == b for a, b in zip(self, other)))
+
+        def __hash__(self):
+            hashes = (hash(x) for x in self)
+            return functools.reduce(operator.xor, hashes, 0)
+
+        def __abs__(self):
+            return math.sqrt(sum(x * x for x in self))
+
+        def __bool__(self):
+            return bool(abs(self))
+
+        def __len__(self):
+            return len(self._components)
+
+        def __getitem__(self, index):
+            cls = type(self)
+            if isinstance(index, slice):
+                return cls(self._components[index])
+            elif isinstance(index, numbers.Integral):
+                return self._components[index]
+            else:
+                msg = '{.__name__} indices must be integers'
+                raise TypeError(msg.format(cls))
+
+        shortcut_names = 'xyzt'
+
+        def __getattr__(self, name):
+            cls = type(self)
+            if len(name) == 1:
+                pos = cls.shortcut_names.find(name)
+                if 0 <= pos < len(self._components):
+                    return self._components[pos]
+            msg = '{.__name__!r} object has no attribute {!r}'
+            raise AttributeError(msg.format(cls, name))
+
+        def angle(self, n):   
+            r = math.sqrt(sum(x * x for x in self[n:]))
+            a = math.atan2(r, self[n-1])
+            if (n == len(self) - 1) and (self[-1] < 0):
+                return math.pi * 2 - a
+            else:
+                return a
+
+        def angles(self):   
+            return (self.angle(n) for n in range(1, len(self)))
+
+        def __format__(self, fmt_spec=''):
+            if fmt_spec.endswith('h'):  # hyperspherical coordinates
+                fmt_spec = fmt_spec[:-1]
+                coords = itertools.chain([abs(self)],
+                                         self.angles())   
+                outer_fmt = '<{}>'   
+            else:
+                coords = self
+                outer_fmt = '({})'   
+            components = (format(c, fmt_spec) for c in coords)   
+            return outer_fmt.format(', '.join(components))   
+
+        @classmethod
+        def frombytes(cls, octets):
+            typecode = chr(octets[0])
+            memv = memoryview(octets[1:]).cast(typecode)
+            return cls(memv)
+#+END_EXAMPLE
+
+- [[#CO122-1][[[file:callouts/1.png]]]]  :: Import =itertools= to use =chain= function in =__format__=.
+
+- [[#CO122-2][[[file:callouts/2.png]]]]  :: Compute one of the angular coordinates, using formulas adapted from the [[http://en.wikipedia.org/wiki/N-sphere][/n/-sphere article]].
+
+- [[#CO122-3][[[file:callouts/3.png]]]]  :: Create generator expression to compute all angular coordinates on demand.
+
+- [[#CO122-4][[[file:callouts/4.png]]]]  :: Use =itertools.chain= to produce /genexp/ to iterate seamlessly over the magnitude and the angular coordinates.
+
+- [[#CO122-5][[[file:callouts/5.png]]]]  :: Configure spherical coordinate display with angular brackets.
+
+- [[#CO122-6][[[file:callouts/6.png]]]]  :: Configure Cartesian coordinate display with parentheses.
+
+- [[#CO122-7][[[file:callouts/7.png]]]]  :: Create generator expression to format each coordinate item on demand.
+
+- [[#CO122-8][[[file:callouts/8.png]]]]  :: Plug formatted components separated by commas inside brackets or parentheses.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-2
+    :CLASS: title
+    :END:
+
+We are making heavy use of generator expressions in =__format__=, =angle=, and =angles= but our focus here is in providing =__format__= to bring =Vector= to the same implementation level as =Vector2d=. When we cover generators in [[file:ch14.html][Chapter 14]] we'll use some of the code in =Vector= as examples, and then the generator tricks will be explained in detail.
+
+This concludes our mission for this chapter. The =Vector= class will be enhanced with infix operators in [[file:ch13.html][Chapter 13]], but our goal here was to explore techniques for coding special methods that are useful in a wide variety of collection classes.
+
+** Chapter Summary
+
+
+The =Vector= example in this chapter was designed to be compatible with =Vector2d=, except for the use of a different constructor signature accepting a single iterable argument, just like the built-in sequence types do. The fact that =Vector= behaves as a sequence just by implementing =__getitem__= and =__len__= prompted a discussion of protocols, the informal interfaces used in duck-typed languages.
+
+We then looked at how the =my_seq[a:b:c]= syntax works behind the scenes, by creating a =slice(a, b, c)= object and handing it to =__getitem__=. Armed with this knowledge, we made =Vector= respond correctly to slicing, by returning new =Vector= instances, just like a Pythonic sequence is expected to do.
+
+The next step was to provide read-only access to the first few =Vector= components using notation such as =my_vec.x=. We did it by implementing =__getattr__=. Doing that opened the possibility of tempting the user to assign to those special components by writing =my_vec.x = 7=, revealing a potential bug. We fixed it by implementing =__setattr__= as well, to forbid assigning values to single-letter attributes. Very often, when you code a =__getattr__= you need to add =__setattr__= too, in order to avoid inconsistent behavior.
+
+Implementing the =__hash__= function provided the perfect context for using =functools.reduce=, because we needed to apply the xor operator =^= in succession to the hashes of all =Vector= components to produce an aggregate hash value for the whole =Vector=. After applying =reduce= in =__hash__=, we used the =all= reducing built-in to create a more efficient =__eq__= method.
+
+The last enhancement to =Vector= was to reimplement the =__format__= method from =Vector2d= by supporting spherical coordinates as an alternative to the default Cartesian coordinates. We used quite a bit of math and several generators to code =__format__= and its auxiliary functions, but these are implementation details---and we'll come back to the generators in [[file:ch14.html][Chapter 14]]. The goal of that last section was to support a custom format, thus fulfilling the promise of a =Vector= that could do everything a =Vector2d= did, and more.
+
+As we did in [[file:ch09.html][Chapter 9]], here we often looked at how standard Python objects behave, to emulate them and provide a “Pythonic” look-and-feel to =Vector=.
+
+In [[file:ch13.html][Chapter 13]], we will implement several infix operators on =Vector=. The math will be much simpler than that in the =angle()= method here, but exploring how infix operators work in Python is a great lesson in OO design. But before we get to operator overloading, we'll step back from working on one class and look at organizing multiple classes with interfaces and inheritance, the subjects of Chapters [[file:ch11.html][11]] and [[file:ch11.html][11]].
+
+** Further Reading
+
+
+Most special methods covered in the =Vector= example also appear in the =Vector2d= example from [[file:ch09.html][Chapter 9]], so the references in [[file:ch09.html#pythonic_further_reading][Further Reading]] are all relevant here.
+
+The powerful =reduce= higher-order function is also known as fold, accumulate, aggregate, compress, and inject. For more information, see Wikipedia's [[http://en.wikipedia.org/wiki/Fold_(higher-order_function)][“Fold (higher-order function)” article]], which presents applications of that higher-order function with emphasis on functional programming with recursive data structures. The article also includes a table listing fold-like functions in dozens of programming languages.
+
+
+
+Soapbox
+
+*Protocols as Informal Interfaces*
+
+Protocols are not an invention of Python. The Smalltalk team, who also coined the expression “object oriented,” used “protocol” as a synonym for what we now call interfaces. Some Smalltalk programming environments allowed programmers to tag a group of methods as a protocol, but that was merely a documentation and navigation aid, and not enforced by the language. That's why I believe “informal interface” is a reasonable short explanation for “protocol” when I speak to an audience that is more familiar with formal (and compiler enforced) interfaces.
+
+Established protocols naturally evolve in any language that uses dynamic typing, that is, when type-checking done at runtime because there is no static type information in method signatures and variables. Ruby is another important OO language that has dynamic typing and uses protocols.
+
+In the Python documentation, you can often tell when a protocol is being discussed when you see language like “a file-like object.” This is a quick way of saying “something that behaves sufficiently like a file, by implementing the parts of the file interface that are relevant in the context.”
+
+You may think that implementing only part of a protocol is sloppy, but it has the advantage of keeping things simple. [[http://bit.ly/pydocs-smn][Section 3.3]] of the “Data Model” chapter suggests:
+
+#+BEGIN_QUOTE
+  When implementing a class that emulates any built-in type, it is important that the emulation only be implemented to the degree that it makes sense for the object being modeled. For example, some sequences may work well with retrieval of individual elements, but extracting a slice may not make sense.
+
+  --- “Data Model” chapter of /The Python Language Reference/
+
+#+END_QUOTE
+
+When we don't need to code nonsense methods just to fulfill some over-designed interface contract and keep the compiler happy, it becomes easier to follow the [[http://en.wikipedia.org/wiki/KISS_principle][KISS principle]].
+
+I'll have more to say about protocols and interfaces in [[file:ch11.html][Chapter 11]], where that is actually the main focus.
+
+*Origins of Duck Typing*
+
+I believe the Ruby community, more than any other, helped popularize the term “duck typing,” as they preached to the Java masses. But the expression has been used in Python discussions before either Ruby or Python were “popular.” According to Wikipedia, an early example of the duck analogy in object-oriented programming is a message to the Python-list by Alex Martelli from July 26, 2000: [[http://bit.ly/1QOuTPx][polymorphism (was Re: Type checking in python?)]]. That's where the quote at the beginning of this chapter came from. If you are curious about the literary origins of the “duck typing” term, and the applications of this OO concept in many languages, check out Wikipedia's [[http://en.wikipedia.org/wiki/Duck_typing][“Duck typing” entry]].
+
+*A safe /format/, with Enhanced Usability*
+
+While implementing =__format__=, we did not take any precautions regarding =Vector= instances with a very large number of components, as we did in =__repr__= using =reprlib=. The reasoning is that =repr()= is for debugging and logging, so it must always generate some serviceable output, while =__format__= is used to display output to end users who presumably want to see the entire =Vector=. If you think this is dangerous, then it would be cool to implement a further extension to the format specifier mini-language.
+
+Here is how I'd do it: by default, any formatted =Vector= would display a reasonable but limited number of components, say 30. If there are more elements than that, the default behavior would be similar to what the =reprlib= does: chop the excess and put =...= in its place. However, if the format specifier ended with the special =*= code, meaning “all,” then the size limitation would be disabled. So a user who's unaware of the problem of very long displays will not be bitten by it by accident. But if the default limitation becomes a nuisance, then the presence of the =...= should prompt the user to research the documentation and discover the =*= formatting code.
+
+Send a pull request to the [[https://github.com/fluentpython/example-code][/Fluent Python/ repository on GitHub]] if you implement this!
+
+*The Search for a Pythonic Sum*
+
+There's no single answer to “What is Pythonic?” just as there's no single answer to “What is beautiful?” Saying, as I often do, that it means using “idiomatic Python” is not 100% satisfactory, because what may be “idiomatic” for you may not be for me. One thing I know: “idiomatic” does not mean using the most obscure language features.
+
+In the [[https://mail.python.org/mailman/listinfo/python-list][Python-list]], there's a thread from April 2003 titled [[http://bit.ly/1QOv5y5][“Pythonic Way to Sum n-th List Element?”]]. It's relevant to our discussion of =reduce= in this chapter.
+
+The original poster, Guy Middleton, asked for an improvement on this solution, stating he did not like to use =lambda=:^{[[[#ftn.id432810][66]]]}
+
+#+BEGIN_EXAMPLE
+    >>> my_list = [[1, 2, 3], [40, 50, 60], [9, 8, 7]]
+    >>> import functools
+    >>> functools.reduce(lambda a, b: a+b, [sub[1] for sub in my_list])
+    60
+#+END_EXAMPLE
+
+That code uses lots of idioms: =lambda=, =reduce=, and a list comprehension. It would probably come last in a popularity contest, because it offends people who hate =lambda= and those who despise list comprehensions---pretty much both sides of a divide.
+
+If you're going to use =lambda=, there's probably no reason to use a list comprehension---except for filtering, which is not the case here.
+
+Here is a solution of my own that will please the =lambda= lovers:
+
+#+BEGIN_EXAMPLE
+    >>> functools.reduce(lambda a, b: a + b[1], my_list, 0)
+    60
+#+END_EXAMPLE
+
+I did not take part in the original thread, and I wouldn't use that in real code, because I don't like =lambda= too much myself, but I wanted to show an example without a list comprehension.
+
+The first answer came from Fernando Perez, creator of IPython, highlighting that NumPy supports /n/-dimensional arrays and /n/-dimensional slicing:
+
+#+BEGIN_EXAMPLE
+    >>> import numpy as np
+    >>> my_array = np.array(my_list)
+    >>> np.sum(my_array[:, 1])
+    60
+#+END_EXAMPLE
+
+I think Perez's solution is cool, but Guy Middleton praised this next solution, by Paul Rubin and Skip Montanaro:
+
+#+BEGIN_EXAMPLE
+    >>> import operator
+    >>> functools.reduce(operator.add, [sub[1] for sub in my_list], 0)
+    60
+#+END_EXAMPLE
+
+Then Evan Simpson asked, “What's wrong with this?”:
+
+#+BEGIN_EXAMPLE
+    >>> t = 0
+    >>> for sub in my_list:
+    ...     total += sub[1]
+    >>> t
+    60
+#+END_EXAMPLE
+
+Lots of people agreed that was quite Pythonic. Alex Martelli went as far as saying that's probably how Guido would code it.
+
+I like Evan Simpson's code but I also like David Eppstein's comment on it:
+
+#+BEGIN_QUOTE
+  If you want the sum of a list of items, you should write it in a way that looks like “the sum of a list of items”, not in a way that looks like “loop over these items, maintain another variable t, perform a sequence of additions”. Why do we have high level languages if not to express our intentions at a higher level and let the language worry about what low-level operations are needed to implement it?
+#+END_QUOTE
+
+Then Alex Martelli comes back to suggest:
+
+#+BEGIN_QUOTE
+  “The sum” is so frequently needed that I wouldn't mind at all if Python singled it out as a built-in. But “reduce(operator.add, ...” just isn't a great way to express it, in my opinion (and yet as an old APL'er, and FP-liker, I /should/ like it---but I don't).
+#+END_QUOTE
+
+Alex goes on to suggest a =sum()= function, which he contributed. It became a built-in in Python 2.3, released only three months after that conversation took place. So Alex's preferred syntax became the norm:
+
+#+BEGIN_EXAMPLE
+    >>> sum([sub[1] for sub in my_list])
+    60
+#+END_EXAMPLE
+
+By the end of the next year (November 2004), Python 2.4 was launched with generator expressions, providing what is now in my opinion the most Pythonic answer to Guy Middleton's original question:
+
+#+BEGIN_EXAMPLE
+    >>> sum(sub[1] for sub in my_list)
+    60
+#+END_EXAMPLE
+
+This is not only more readable than =reduce= but also avoids the trap of the empty sequence: =sum([])= is =0=, simple as that.
+
+In the same conversation, Alex Martelli suggests the =reduce= built-in in Python 2 was more trouble than it was worth, because it encouraged coding idioms that were hard to explain. He was most convincing: the function was demoted to the =functools= module in Python 3.
+
+Still, =functools.reduce= has its place. It solved the problem of our =Vector.__hash__= in a way that I would call Pythonic.
+
+
+
+--------------
+
+
+^{[[[#id910984][60]]]} The =iter()= function is covered in [[file:ch14.html][Chapter 14]], along with the =__iter__= method.
+
+
+^{[[[#id678206][61]]]} Attribute lookup is more complicated than this; we'll see the gory details in [[file:pt06.html][Part VI]]. For now, this simplified explanation will do.
+
+
+^{[[[#id644472][62]]]} The =sum=, =any=, and =all= cover the most common uses of =reduce=. See the discussion in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]].
+
+
+^{[[[#id825039][63]]]} We'll seriously consider the matter of =Vector([1, 2]) == (1, 2)= in [[file:ch13.html#op_overloading_101_sec][Operator Overloading 101]].
+
+
+^{[[[#id417771][64]]]} That's surprising (to me, at least). I think =zip= should raise =ValueError= if the sequences are not all of the same length, which is what happens when unpacking an iterable to a tuple of variables of different length.
+
+
+^{[[[#id540042][65]]]} The Wolfram Mathworld site has an article on [[http://mathworld.wolfram.com/Hypersphere.html][Hypersphere]]; on Wikipedia, “hypersphere” redirects to [[http://en.wikipedia.org/wiki/N-sphere][the "/n/-sphere” entry]].
+
+
+^{[[[#id432810][66]]]} I adapted the code for this presentation: in 2003, =reduce= was a built-in, but in Python 3 we need to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+
+][60]]]} The =iter()= function is covered in [[file:ch14.html][Chapter 14]], along with the =__iter__= method.
+
+
+^{[[[#id678206][61]]]} Attribute lookup is more complicated than this; we'll see the gory details in [[file:pt06.html][Part VI]]. For now, this simplified explanation will do.
+
+
+^{[[[#id644472][62]]]} The =sum=, =any=, and =all= cover the most common uses of =reduce=. See the discussion in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]].
+
+
+^{[[[#id825039][63]]]} We'll seriously consider the matter of =Vector([1, 2]) == (1, 2)= in [[file:ch13.html#op_overloading_101_sec][Operator Overloading 101]].
+
+
+^{[[[#id417771][64]]]} That's surprising (to me, at least). I think =zip= should raise =ValueError= if the sequences are not all of the same length, which is what happens when unpacking an iterable to a tuple of variables of different length.
+
+
+^{[[[#id540042][65]]]} The Wolfram Mathworld site has an article on [[http://mathworld.wolfram.com/Hypersphere.html][Hypersphere]]; on Wikipedia, “hypersphere” redirects to [[http://en.wikipedia.org/wiki/N-sphere][the "/n/-sphere” entry]].
+
+
+^{[[[#id432810][66]]]} I adapted the code for this presentation: in 2003, =reduce= was a built-in, but in Python 3 we need to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+
+ to import it; also, I replaced the names =x= and =y= with =my_list= and =sub=, for sub-list.
+
+

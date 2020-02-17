@@ -1,0 +1,411 @@
+* Chapter 6. Design Patterns with First-Class Functions
+
+#+BEGIN_QUOTE
+  Conformity to patterns is not a measure of goodness.^{[[[#ftn.id493413][34]]]}
+
+  --- Ralph Johnson /Coauthor of the Design Patterns classic/
+
+#+END_QUOTE
+
+Although design patterns are language-independent, that does not mean every pattern applies to every language. In his 1996 presentation, [[http://norvig.com/design-patterns/][“Design Patterns in Dynamic Languages”]], Peter Norvig states that 16 out of the 23 patterns in the original Design Patterns book by Gamma et al. become either “invisible or simpler” in a dynamic language (slide 9). He was talking about Lisp and Dylan, but many of the relevant dynamic features are also present in Python.
+
+The authors of /Design Patterns/ acknowledge in their Introduction that the implementation language determines which patterns are relevant:
+
+#+BEGIN_QUOTE
+  The choice of programming language is important because it influences one's point of view. Our patterns assume Smalltalk/C++-level language features, and that choice determines what can and cannot be implemented easily. If we assumed procedural languages, we might have included design patterns called “Inheritance,” “Encapsulation,” and “Polymorphism.” Similarly, some of our patterns are supported directly by the less common object-oriented languages. CLOS has multi-methods, for example, which lessen the need for a pattern such as Visitor.^{[[[#ftn.id633788][35]]]}
+#+END_QUOTE
+
+In particular, in the context of languages with first-class functions, Norvig suggests rethinking the Strategy, Command, Template Method, and Visitor patterns. The general idea is: you can replace instances of some participant class in these patterns with simple functions, reducing a lot of boilerplate code. In this chapter, we will refactor Strategy using function objects, and discuss a similar approach to simplifying the Command pattern.
+
+** Case Study: Refactoring Strategy
+
+
+Strategy is a good example of a design pattern that can be simpler in Python if you leverage functions as first-class objects. In the following section, we describe and implement Strategy using the “classic” structure described in /Design Patterns/. If you are familiar with the classic pattern, you can skip to [[file:ch06.html#pythonic_strategy][Function-Oriented Strategy]] where we refactor the code using functions, significantly reducing the line count.
+
+*** Classic Strategy
+
+
+Modules in Python are also first-class objects, and the standard library provides several functions to handle them. The built-in =globals= is described as follows in the Python docs:
+
+-  =globals()=  :: Return a dictionary representing the current global symbol table. This is always the dictionary of the current module (inside a function or method, this is the module where it is defined, not the module from which it is called).
+
+[[file:ch06.html#ex_strategy_best2][Example 6-7]] is a somewhat hackish way of using =globals= to help =best_promo= automatically find the other available =*_promo= functions.
+
+
+
+Example 6-7. The promos list is built by introspection of the module global namespace
+
+#+BEGIN_EXAMPLE
+    promos = [globals()[name] for name in globals()   
+                if name.endswith('_promo')   
+                and name != 'best_promo']    
+
+    def best_promo(order):
+        """Select best discount available
+        """
+        return max(promo(order) for promo in promos)   
+#+END_EXAMPLE
+
+- [[#CO66-1][[[file:callouts/1.png]]]]  :: Iterate over each =name= in the dictionary returned by =globals()=.
+
+- [[#CO66-2][[[file:callouts/2.png]]]]  :: Select only names that end with the =_promo= suffix.
+
+- [[#CO66-3][[[file:callouts/3.png]]]]  :: Filter out =best_promo= itself, to avoid an infinite recursion.
+
+- [[#CO66-4][[[file:callouts/4.png]]]]  :: No changes inside =best_promo=.
+
+Another way of collecting the available promotions would be to create a module and put all the strategy functions there, except for =best_promo=.
+
+In [[file:ch06.html#ex_strategy_best3][Example 6-8]], the only significant change is that the list of strategy functions is built by introspection of a separate module called =promotions=. Note that [[file:ch06.html#ex_strategy_best3][Example 6-8]] depends on importing the =promotions= module as well as =inspect=, which provides high-level introspection functions (the imports are not shown for brevity, because they would normally be at the top of the file).
+
+
+
+Example 6-8. The promos list is built by introspection of a new promotions module
+
+#+BEGIN_EXAMPLE
+    promos = [func for name, func in
+                    inspect.getmembers(promotions, inspect.isfunction)]
+
+    def best_promo(order):
+        """Select best discount available
+        """
+        return max(promo(order) for promo in promos)
+#+END_EXAMPLE
+
+The function =inspect.getmembers= returns the attributes of an object---in this case, the =promotions= module---optionally filtered by a predicate (a boolean function). We use =inspect.isfunction= to get only the functions from the module.
+
+[[file:ch06.html#ex_strategy_best3][Example 6-8]] works regardless of the names given to the functions; all that matters is that the =promotions= module contains only functions that calculate discounts given orders. Of course, this is an implicit assumption of the code. If someone were to create a function with a different signature in the =promotions= module, then =best_promo= would break while trying to apply it to an order.
+
+We could add more stringent tests to filter the functions, by inspecting their arguments for instance. The point of [[file:ch06.html#ex_strategy_best3][Example 6-8]] is not to offer a complete solution, but to highlight one possible use of module introspection.
+
+A more explicit alternative for dynamically collecting promotional discount functions would be to use a simple decorator. We'll show yet another version of our ecommerce Strategy example in [[file:ch07.html][Chapter 7]], which deals with function decorators.
+
+In the next section, we discuss Command---another design pattern that is sometimes implemented via single-method classes when plain functions would do.
+
+** Command
+
+
+Command is another design pattern that can be simplified by the use of functions passed as arguments. [[file:ch06.html#command_uml][Figure 6-2]] shows the arrangement of classes in the Command pattern.
+
+
+
+[[file:images/flup_0602.png]]
+
+Figure 6-2. UML class diagram for menu-driven text editor implemented with the Command design pattern. Each command may have a different receiver: the object that implements the action. For PasteCommand, the receiver is the Document. For OpenCommand, the receiver is the application.
+
+The goal of Command is to decouple an object that invokes an operation (the Invoker) from the provider object that implements it (the Receiver). In the example from /Design Patterns/, each invoker is a menu item in a graphical application, and the receivers are the document being edited or the application itself.
+
+The idea is to put a =Command= object between the two, implementing an interface with a single method, =execute=, which calls some method in the Receiver to perform the desired operation. That way the Invoker does not need to know the interface of the Receiver, and different receivers can be adapted through different =Command= subclasses. The Invoker is configured with a concrete command and calls its =execute= method to operate it. Note in [[file:ch06.html#command_uml][Figure 6-2]] that =MacroCommand= may store a sequence of commands; its =execute()= method calls the same method in each command stored.
+
+Quoting from Gamma et al., “Commands are an object-oriented replacement for callbacks.” The question is: do we need an object-oriented replacement for callbacks? Sometimes yes, but not always.
+
+Instead of giving the Invoker a =Command= instance, we can simply give it a function. Instead of calling =command.execute()=, the Invoker can just call =command()=. The =MacroCommand= can be implemented with a class implementing =__call__=. Instances of =MacroCommand= would be callables, each holding a list of functions for future invocation, as implemented in [[file:ch06.html#ex_macro_command][Example 6-9]].
+
+
+
+Example 6-9. Each instance of MacroCommand has an internal list of commands
+
+#+BEGIN_EXAMPLE
+    class MacroCommand:
+        """A command that executes a list of commands"""
+
+        def __init__(self, commands):
+            self.commands = list(commands)  # 
+
+        def __call__(self):
+            for command in self.commands:  # 
+                command()
+#+END_EXAMPLE
+
+- [[#CO67-1][[[file:callouts/1.png]]]]  :: Building a list from the =commands= arguments ensures that it is iterable and keeps a local copy of the command references in each =MacroCommand= instance.
+
+- [[#CO67-2][[[file:callouts/2.png]]]]  :: When an instance of =MacroCommand= is invoked, each command in =self.commands= is called in sequence.
+
+More advanced uses of the Command pattern---to support undo, for example---may require more than a simple callback function. Even then, Python provides a couple of alternatives that deserve consideration:
+
+- A callable instance like =MacroCommand= in [[file:ch06.html#ex_macro_command][Example 6-9]] can keep whatever state is necessary, and provide extra methods in addition to =__call__=.
+- A closure can be used to hold the internal state of a function between calls.
+
+This concludes our rethinking of the Command pattern with first-class functions. At a high level, the approach here was similar to the one we applied to Strategy: replacing with callables the instances of a participant class that implemented a single-method interface. After all, every Python callable implements a single-method interface, and that method is named =__call__=.
+
+** Chapter Summary
+
+
+As Peter Norvig pointed out a couple of years after the classic /Design Patterns/ book appeared, “16 of 23 patterns have qualitatively simpler implementation in Lisp or Dylan than in C++ for at least some uses of each pattern” (slide 9 of Norvig's [[http://bit.ly/1HGC0r5][“Design Patterns in Dynamic Languages” presentation]]). Python shares some of the dynamic features of the Lisp and Dylan languages, in particular first-class functions, our focus in this part of the book.
+
+From the same talk quoted at the start of this chapter, in reflecting on the 20th anniversary of /Design Patterns: Elements of Reusable Object-Oriented Software/, Ralph Johnson has stated that one of the failings of the book is “Too much emphasis on patterns as end-points instead of steps in the design patterns.”^{[[[#ftn.id611866][38]]]} In this chapter, we used the Strategy pattern as a starting point: a working solution that we could simplify using first-class functions.
+
+In many cases, functions or callable objects provide a more natural way of implementing callbacks in Python than mimicking the Strategy or the Command patterns as described by Gamma, Helm, Johnson, and Vlissides. The refactoring of Strategy and the discussion of Command in this chapter are examples of a more general insight: sometimes you may encounter a design pattern or an API that requires that components implement an interface with a single method, and that method has a generic-sounding name such as “execute”, “run”, or “doIt”. Such patterns or APIs often can be implemented with less boilerplate code in Python using first-class functions or other callables.
+
+The message from Peter Norvig's design patterns slides is that the Command and Strategy patterns---along with Template Method and Visitor---can be made simpler or even “invisible” with first-class functions, at least for some applications of these patterns.
+
+** Further Reading
+
+
+Our discussion of Strategy ended with a suggestion that function decorators could be used to improve on [[file:ch06.html#ex_strategy_best3][Example 6-8]]. We also mentioned the use of closures a couple of times in this chapter. Decorators as well as closures are the focus of [[file:ch07.html][Chapter 7]]. That chapter starts with a refactoring of the ecommerce example using a decorator to register available promotions.
+
+“Recipe 8.21. Implementing the Visitor Pattern,” in the /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, Third Edition]]/ (O'Reilly), by David Beazley and Brian K. Jones, presents an elegant implementation of the Visitor pattern in which a =NodeVisitor= class handles methods as first-class objects.
+
+On the general topic of design patterns, the choice of readings for the Python programmer is not as broad as what is available to other language communities.
+
+As far as I know, /Learning Python Design Patterns/, by Gennadiy Zlobin (Packt), is the only book entirely devoted to patterns in Python---as of June 2014. But Zlobin's work is quite short (100 pages) and covers eight of the original 23 design patterns.
+
+/Expert Python Programming/ by Tarek Ziadé (Packt) is one of the best intermediate-level Python books in the market, and its final chapter, “Useful Design Patterns,” presents seven of the classic patterns from a Pythonic perspective.
+
+Alex Martelli has given several talks about Python Design Patterns. There is a video of his [[http://bit.ly/1HGBXvx][EuroPython 2011 presentation]] and a [[http://www.aleax.it/gdd_pydp.pdf][set of slides on his personal website]]. I've found different slide decks and videos over the years, of varying lengths, so it is worthwhile to do a thorough search for his name with the words “Python Design Patterns.”
+
+Around 2008, Bruce Eckel---author of the excellent /Thinking in Java/ (Prentice Hall)---started a book titled [[http://bit.ly/1HGBXeQ][/Python 3 Patterns, Recipes and Idioms/]]. It was to be written by a community of contributors led by Eckel, but six years later it's still incomplete and apparently stalled (as I write this, the last change to the repository is two years old).
+
+There are many books about design patterns in the context of Java, but among them the one I like most is /Head First Design Patterns/ by Eric Freeman, Bert Bates, Kathy Sierra, and Elisabeth Robson (O'Reilly). It explains 16 of the 23 classic patterns. If you like the wacky style of the /Head First/ series and need an introduction to this topic, you will love that work. However, it is Java-centric.
+
+For a fresh look at patterns from the point of view of a dynamic language with duck typing and first-class functions, /Design Patterns in Ruby/ by Russ Olsen (Addison-Wesley) has many insights that are also applicable to Python. In spite of many the syntactic differences, at the semantic level Python and Ruby are closer to each other than to Java or C++.
+
+In [[http://norvig.com/design-patterns/][Design Patterns in Dynamic Languages]] (slides), Peter Norvig shows how first-class functions (and other dynamic features) make several of the original design patterns either simpler or unnecessary.
+
+Of course, the original /Design Patterns/ book by Gamma et al. is mandatory reading if you are serious about this subject. The Introduction by itself is worth the price. That is the source of the often quoted design principles “Program to an interface, not an implementation” and “Favor object composition over class inheritance.”
+
+Soapbox
+
+Python has first-class functions and first-class types, features that Norvig claims affect 10 of the 23 patterns (slide 10 of [[http://norvig.com/design-patterns/][Design Patterns in Dynamic Languages]]). In the next chapter, we'll see that Python also has generic functions ([[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]]), similar to the CLOS multimethods that Gamma et al. suggest as a simpler way to implement the classic Visitor pattern. Norvig, on the other hand, says that multimethods simplify the Builder pattern (slide 10). Matching design patterns to language features is not an exact science.
+
+In classrooms around the world, design patterns are frequently taught using Java examples. I've heard more than one student claim that they were led to believe that the original design patterns are useful in any implementation language. It turns out that the “classic” 23 patterns from the Gamma et al. book apply to “classic” Java very well in spite of being originally presented mostly in the context of C++---a few have Smalltalk examples in the book. But that does not mean every one of those patterns applies equally well in any language. The authors are explicit right at the beginning of their book that “some of our patterns are supported directly by the less common object-oriented languages” (recall full quote on first page of this chapter).
+
+The Python bibliography about design patterns is very thin, compared to that of Java, C++, or Ruby. In [[file:ch06.html#dp_further][Further Reading]] I mentioned /Learning Python Design Patterns/ by Gennadiy Zlobin, which was published as recently as November 2013. In contrast, Russ Olsen's /Design Patterns in Ruby/ was published in 2007 and has 384 pages---284 more than Zlobin's work.
+
+Now that Python is becoming increasingly popular in academia, let's hope more will be written about design patterns in the context of this language. Also, Java 8 introduced method references and anonymous functions, and those highly anticipated features are likely to prompt fresh approaches to patterns in Java---recognizing that as languages evolve, so must our understanding of how to apply the classic design patterns.
+
+
+
+--------------
+
+
+^{[[[#id493413][34]]]} From a slide in the talk “Root Cause Analysis of Some Faults in Design Patterns,” presented by Ralph Johnson at IME/CCSL, Universidade de São Paulo, Nov. 15, 2014.
+
+
+^{[[[#id633788][35]]]} Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/ (Addison-Wesley, 1995), p. 4.
+
+
+^{[[[#id827864][36]]]} See page 323 of /Design Patterns/.
+
+
+^{[[[#id582902][37]]]} /idem/, p. 196
+
+
+^{[[[#id611866][38]]]} From the same talk quoted at the start of this chapter: “Root Cause Analysis of Some Faults in Design Patterns,” presented by Johnson at IME-USP, November 15, 2014.
+
+
+talk “Root Cause Analysis of Some Faults in Design Patterns,” presented by Ralph Johnson at IME/CCSL, Universidade de São Paulo, Nov. 15, 2014.
+
+
+^{[[[#id633788][35]]]} Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/ (Addison-Wesley, 1995), p. 4.
+
+
+^{[[[#id827864][36]]]} See page 323 of /Design Patterns/.
+
+
+^{[[[#id582902][37]]]} /idem/, p. 196
+
+
+^{[[[#id611866][38]]]} From the same talk quoted at the start of this chapter: “Root Cause Analysis of Some Faults in Design Patterns,” presented by Johnson at IME-USP, November 15, 2014.
+
+
+terns,” presented by Johnson at IME-USP, November 15, 2014.
+
+
+= list, or else the new promotion will work when explicitly passed as an argument to =Order=, but will not be considered by =best_promotion=.
+
+Read on for a couple of solutions to this issue.
+
+*** Finding Strategies in a Module
+    :PROPERTIES:
+    :CUSTOM_ID: _finding_strategies_in_a_module
+    :CLASS: title
+    :END:
+
+Modules in Python are also first-class objects, and the standard library provides several functions to handle them. The built-in =globals= is described as follows in the Python docs:
+
+-  =globals()=  :: Return a dictionary representing the current global symbol table. This is always the dictionary of the current module (inside a function or method, this is the module where it is defined, not the module from which it is called).
+
+[[file:ch06.html#ex_strategy_best2][Example 6-7]] is a somewhat hackish way of using =globals= to help =best_promo= automatically find the other available =*_promo= functions.
+
+
+
+Example 6-7. The promos list is built by introspection of the module global namespace
+
+#+BEGIN_EXAMPLE
+    promos = [globals()[name] for name in globals()   
+                if name.endswith('_promo')   
+                and name != 'best_promo']    
+
+    def best_promo(order):
+        """Select best discount available
+        """
+        return max(promo(order) for promo in promos)   
+#+END_EXAMPLE
+
+- [[#CO66-1][[[file:callouts/1.png]]]]  :: Iterate over each =name= in the dictionary returned by =globals()=.
+
+- [[#CO66-2][[[file:callouts/2.png]]]]  :: Select only names that end with the =_promo= suffix.
+
+- [[#CO66-3][[[file:callouts/3.png]]]]  :: Filter out =best_promo= itself, to avoid an infinite recursion.
+
+- [[#CO66-4][[[file:callouts/4.png]]]]  :: No changes inside =best_promo=.
+
+Another way of collecting the available promotions would be to create a module and put all the strategy functions there, except for =best_promo=.
+
+In [[file:ch06.html#ex_strategy_best3][Example 6-8]], the only significant change is that the list of strategy functions is built by introspection of a separate module called =promotions=. Note that [[file:ch06.html#ex_strategy_best3][Example 6-8]] depends on importing the =promotions= module as well as =inspect=, which provides high-level introspection functions (the imports are not shown for brevity, because they would normally be at the top of the file).
+
+
+
+Example 6-8. The promos list is built by introspection of a new promotions module
+
+#+BEGIN_EXAMPLE
+    promos = [func for name, func in
+                    inspect.getmembers(promotions, inspect.isfunction)]
+
+    def best_promo(order):
+        """Select best discount available
+        """
+        return max(promo(order) for promo in promos)
+#+END_EXAMPLE
+
+The function =inspect.getmembers= returns the attributes of an object---in this case, the =promotions= module---optionally filtered by a predicate (a boolean function). We use =inspect.isfunction= to get only the functions from the module.
+
+[[file:ch06.html#ex_strategy_best3][Example 6-8]] works regardless of the names given to the functions; all that matters is that the =promotions= module contains only functions that calculate discounts given orders. Of course, this is an implicit assumption of the code. If someone were to create a function with a different signature in the =promotions= module, then =best_promo= would break while trying to apply it to an order.
+
+We could add more stringent tests to filter the functions, by inspecting their arguments for instance. The point of [[file:ch06.html#ex_strategy_best3][Example 6-8]] is not to offer a complete solution, but to highlight one possible use of module introspection.
+
+A more explicit alternative for dynamically collecting promotional discount functions would be to use a simple decorator. We'll show yet another version of our ecommerce Strategy example in [[file:ch07.html][Chapter 7]], which deals with function decorators.
+
+In the next section, we discuss Command---another design pattern that is sometimes implemented via single-method classes when plain functions would do.
+
+** Command
+
+
+Command is another design pattern that can be simplified by the use of functions passed as arguments. [[file:ch06.html#command_uml][Figure 6-2]] shows the arrangement of classes in the Command pattern.
+
+
+
+[[file:images/flup_0602.png]]
+
+Figure 6-2. UML class diagram for menu-driven text editor implemented with the Command design pattern. Each command may have a different receiver: the object that implements the action. For PasteCommand, the receiver is the Document. For OpenCommand, the receiver is the application.
+
+The goal of Command is to decouple an object that invokes an operation (the Invoker) from the provider object that implements it (the Receiver). In the example from /Design Patterns/, each invoker is a menu item in a graphical application, and the receivers are the document being edited or the application itself.
+
+The idea is to put a =Command= object between the two, implementing an interface with a single method, =execute=, which calls some method in the Receiver to perform the desired operation. That way the Invoker does not need to know the interface of the Receiver, and different receivers can be adapted through different =Command= subclasses. The Invoker is configured with a concrete command and calls its =execute= method to operate it. Note in [[file:ch06.html#command_uml][Figure 6-2]] that =MacroCommand= may store a sequence of commands; its =execute()= method calls the same method in each command stored.
+
+Quoting from Gamma et al., “Commands are an object-oriented replacement for callbacks.” The question is: do we need an object-oriented replacement for callbacks? Sometimes yes, but not always.
+
+Instead of giving the Invoker a =Command= instance, we can simply give it a function. Instead of calling =command.execute()=, the Invoker can just call =command()=. The =MacroCommand= can be implemented with a class implementing =__call__=. Instances of =MacroCommand= would be callables, each holding a list of functions for future invocation, as implemented in [[file:ch06.html#ex_macro_command][Example 6-9]].
+
+
+
+Example 6-9. Each instance of MacroCommand has an internal list of commands
+
+#+BEGIN_EXAMPLE
+    class MacroCommand:
+        """A command that executes a list of commands"""
+
+        def __init__(self, commands):
+            self.commands = list(commands)  # 
+
+        def __call__(self):
+            for command in self.commands:  # 
+                command()
+#+END_EXAMPLE
+
+- [[#CO67-1][[[file:callouts/1.png]]]]  :: Building a list from the =commands= arguments ensures that it is iterable and keeps a local copy of the command references in each =MacroCommand= instance.
+
+- [[#CO67-2][[[file:callouts/2.png]]]]  :: When an instance of =MacroCommand= is invoked, each command in =self.commands= is called in sequence.
+
+More advanced uses of the Command pattern---to support undo, for example---may require more than a simple callback function. Even then, Python provides a couple of alternatives that deserve consideration:
+
+- A callable instance like =MacroCommand= in [[file:ch06.html#ex_macro_command][Example 6-9]] can keep whatever state is necessary, and provide extra methods in addition to =__call__=.
+- A closure can be used to hold the internal state of a function between calls.
+
+This concludes our rethinking of the Command pattern with first-class functions. At a high level, the approach here was similar to the one we applied to Strategy: replacing with callables the instances of a participant class that implemented a single-method interface. After all, every Python callable implements a single-method interface, and that method is named =__call__=.
+
+** Chapter Summary
+
+
+As Peter Norvig pointed out a couple of years after the classic /Design Patterns/ book appeared, “16 of 23 patterns have qualitatively simpler implementation in Lisp or Dylan than in C++ for at least some uses of each pattern” (slide 9 of Norvig's [[http://bit.ly/1HGC0r5][“Design Patterns in Dynamic Languages” presentation]]). Python shares some of the dynamic features of the Lisp and Dylan languages, in particular first-class functions, our focus in this part of the book.
+
+From the same talk quoted at the start of this chapter, in reflecting on the 20th anniversary of /Design Patterns: Elements of Reusable Object-Oriented Software/, Ralph Johnson has stated that one of the failings of the book is “Too much emphasis on patterns as end-points instead of steps in the design patterns.”^{[[[#ftn.id611866][38]]]} In this chapter, we used the Strategy pattern as a starting point: a working solution that we could simplify using first-class functions.
+
+In many cases, functions or callable objects provide a more natural way of implementing callbacks in Python than mimicking the Strategy or the Command patterns as described by Gamma, Helm, Johnson, and Vlissides. The refactoring of Strategy and the discussion of Command in this chapter are examples of a more general insight: sometimes you may encounter a design pattern or an API that requires that components implement an interface with a single method, and that method has a generic-sounding name such as “execute”, “run”, or “doIt”. Such patterns or APIs often can be implemented with less boilerplate code in Python using first-class functions or other callables.
+
+The message from Peter Norvig's design patterns slides is that the Command and Strategy patterns---along with Template Method and Visitor---can be made simpler or even “invisible” with first-class functions, at least for some applications of these patterns.
+
+** Further Reading
+
+
+Our discussion of Strategy ended with a suggestion that function decorators could be used to improve on [[file:ch06.html#ex_strategy_best3][Example 6-8]]. We also mentioned the use of closures a couple of times in this chapter. Decorators as well as closures are the focus of [[file:ch07.html][Chapter 7]]. That chapter starts with a refactoring of the ecommerce example using a decorator to register available promotions.
+
+“Recipe 8.21. Implementing the Visitor Pattern,” in the /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, Third Edition]]/ (O'Reilly), by David Beazley and Brian K. Jones, presents an elegant implementation of the Visitor pattern in which a =NodeVisitor= class handles methods as first-class objects.
+
+On the general topic of design patterns, the choice of readings for the Python programmer is not as broad as what is available to other language communities.
+
+As far as I know, /Learning Python Design Patterns/, by Gennadiy Zlobin (Packt), is the only book entirely devoted to patterns in Python---as of June 2014. But Zlobin's work is quite short (100 pages) and covers eight of the original 23 design patterns.
+
+/Expert Python Programming/ by Tarek Ziadé (Packt) is one of the best intermediate-level Python books in the market, and its final chapter, “Useful Design Patterns,” presents seven of the classic patterns from a Pythonic perspective.
+
+Alex Martelli has given several talks about Python Design Patterns. There is a video of his [[http://bit.ly/1HGBXvx][EuroPython 2011 presentation]] and a [[http://www.aleax.it/gdd_pydp.pdf][set of slides on his personal website]]. I've found different slide decks and videos over the years, of varying lengths, so it is worthwhile to do a thorough search for his name with the words “Python Design Patterns.”
+
+Around 2008, Bruce Eckel---author of the excellent /Thinking in Java/ (Prentice Hall)---started a book titled [[http://bit.ly/1HGBXeQ][/Python 3 Patterns, Recipes and Idioms/]]. It was to be written by a community of contributors led by Eckel, but six years later it's still incomplete and apparently stalled (as I write this, the last change to the repository is two years old).
+
+There are many books about design patterns in the context of Java, but among them the one I like most is /Head First Design Patterns/ by Eric Freeman, Bert Bates, Kathy Sierra, and Elisabeth Robson (O'Reilly). It explains 16 of the 23 classic patterns. If you like the wacky style of the /Head First/ series and need an introduction to this topic, you will love that work. However, it is Java-centric.
+
+For a fresh look at patterns from the point of view of a dynamic language with duck typing and first-class functions, /Design Patterns in Ruby/ by Russ Olsen (Addison-Wesley) has many insights that are also applicable to Python. In spite of many the syntactic differences, at the semantic level Python and Ruby are closer to each other than to Java or C++.
+
+In [[http://norvig.com/design-patterns/][Design Patterns in Dynamic Languages]] (slides), Peter Norvig shows how first-class functions (and other dynamic features) make several of the original design patterns either simpler or unnecessary.
+
+Of course, the original /Design Patterns/ book by Gamma et al. is mandatory reading if you are serious about this subject. The Introduction by itself is worth the price. That is the source of the often quoted design principles “Program to an interface, not an implementation” and “Favor object composition over class inheritance.”
+
+Soapbox
+
+Python has first-class functions and first-class types, features that Norvig claims affect 10 of the 23 patterns (slide 10 of [[http://norvig.com/design-patterns/][Design Patterns in Dynamic Languages]]). In the next chapter, we'll see that Python also has generic functions ([[file:ch07.html#generic_functions][Generic Functions with Single Dispatch]]), similar to the CLOS multimethods that Gamma et al. suggest as a simpler way to implement the classic Visitor pattern. Norvig, on the other hand, says that multimethods simplify the Builder pattern (slide 10). Matching design patterns to language features is not an exact science.
+
+In classrooms around the world, design patterns are frequently taught using Java examples. I've heard more than one student claim that they were led to believe that the original design patterns are useful in any implementation language. It turns out that the “classic” 23 patterns from the Gamma et al. book apply to “classic” Java very well in spite of being originally presented mostly in the context of C++---a few have Smalltalk examples in the book. But that does not mean every one of those patterns applies equally well in any language. The authors are explicit right at the beginning of their book that “some of our patterns are supported directly by the less common object-oriented languages” (recall full quote on first page of this chapter).
+
+The Python bibliography about design patterns is very thin, compared to that of Java, C++, or Ruby. In [[file:ch06.html#dp_further][Further Reading]] I mentioned /Learning Python Design Patterns/ by Gennadiy Zlobin, which was published as recently as November 2013. In contrast, Russ Olsen's /Design Patterns in Ruby/ was published in 2007 and has 384 pages---284 more than Zlobin's work.
+
+Now that Python is becoming increasingly popular in academia, let's hope more will be written about design patterns in the context of this language. Also, Java 8 introduced method references and anonymous functions, and those highly anticipated features are likely to prompt fresh approaches to patterns in Java---recognizing that as languages evolve, so must our understanding of how to apply the classic design patterns.
+
+
+
+--------------
+
+
+^{[[[#id493413][34]]]} From a slide in the talk “Root Cause Analysis of Some Faults in Design Patterns,” presented by Ralph Johnson at IME/CCSL, Universidade de São Paulo, Nov. 15, 2014.
+
+
+^{[[[#id633788][35]]]} Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/ (Addison-Wesley, 1995), p. 4.
+
+
+^{[[[#id827864][36]]]} See page 323 of /Design Patterns/.
+
+
+^{[[[#id582902][37]]]} /idem/, p. 196
+
+
+^{[[[#id611866][38]]]} From the same talk quoted at the start of this chapter: “Root Cause Analysis of Some Faults in Design Patterns,” presented by Johnson at IME-USP, November 15, 2014.
+
+
+talk “Root Cause Analysis of Some Faults in Design Patterns,” presented by Ralph Johnson at IME/CCSL, Universidade de São Paulo, Nov. 15, 2014.
+
+
+^{[[[#id633788][35]]]} Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, /Design Patterns: Elements of Reusable Object-Oriented Software/ (Addison-Wesley, 1995), p. 4.
+
+
+^{[[[#id827864][36]]]} See page 323 of /Design Patterns/.
+
+
+^{[[[#id582902][37]]]} /idem/, p. 196
+
+
+^{[[[#id611866][38]]]} From the same talk quoted at the start of this chapter: “Root Cause Analysis of Some Faults in Design Patterns,” presented by Johnson at IME-USP, November 15, 2014.
+
+
+terns,” presented by Johnson at IME-USP, November 15, 2014.
+
+

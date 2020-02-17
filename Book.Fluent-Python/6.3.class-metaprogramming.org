@@ -1,0 +1,943 @@
+* Chapter 21. Class Metaprogramming
+
+
+None of the attributes mentioned in this section are listed by the =dir(…)= function.
+
+With this, our study of class metaprogramming ends. This is a vast topic and I only scratched the surface. That's why we have “Further Reading” sections in this book.
+
+** Chapter Summary
+
+
+Class metaprogramming is about creating or customizing classes dynamically. Classes in Python are first-class objects, so we started the chapter by showing how a class can be created by a function invoking the =type= built-in metaclass.
+
+In the next section, we went back to the =LineItem= class with descriptors from [[file:ch20.html][Chapter 20]] to solve a lingering issue: how to generate names for the storage attributes that reflected the names of the managed attributes (e.g., =_Quantity#price= instead of =_Quantity#1=). The solution was to use a class decorator, essentially a function that gets a just-built class and has the opportunity to inspect it, change it, and even replace it with a different class.
+
+We then moved to a discussion of when different parts of the source code of a module actually run. We saw that there is some overlap between the so-called “import time” and “runtime,” but clearly a lot of code runs triggered by the =import= statement. Understanding what runs when is crucial, and there are some subtle rules, so we used the evaluation-time exercises to cover this topic.
+
+The following subject was an introduction to metaclasses. We saw that all classes are instances of =type=, directly or indirectly, so that is the “root metaclass” of the language. A variation of the evaluation-time exercise was designed to show that a metaclass can customize a hierarchy of classes---in contrast with a class decorator, which affects a single class and may have no impact on its descendants.
+
+The first practical application of a metaclass was to solve the issue of the storage attribute names in =LineItem=. The resulting code is a bit trickier than the class decorator solution, but it can be encapsulated in a module so that the user merely subclasses an apparently plain class (=model.Entity=) without being aware that it is an instance of a custom metaclass (=model.EntityMeta=). The end result is reminiscent of the ORM APIs in Django and SQLAlchemy, which use metaclasses in their implementations but don't require the user to know anything about them.
+
+The second metaclass we implemented added a small feature to =model.EntityMeta=: a =__prepare__= method to provide an =OrderedDict= to serve as the mapping from names to attributes. This preserves the order in which those attributes are bound in the body of the class under construction, so that metaclass methods like =__new__= and =__init__= can use that information. In the example, we implemented a =_field_names= class attribute, which made possible an =Entity.field_names()= so users could retrieve the =Validated= descriptors in the same order they appear in the source code.
+
+The last section was a brief overview of attributes and methods available in all Python classes.
+
+Metaclasses are challenging, exciting, and---sometimes---abused by programmers trying to be too clever. To wrap up, let's recall Alex Martelli's final advice from his essay [[file:ch11.html#waterfowl_essay][Waterfowl and ABCs]]:
+
+#+BEGIN_QUOTE
+  And, /don't/ define custom ABCs (or metaclasses) in production code... if you feel the urge to do so, I'd bet it's likely to be a case of “all problems look like a nail”-syndrome for somebody who just got a shiny new hammer---you (and future maintainers of your code) will be much happier sticking with straightforward and simple code, eschewing such depths.
+
+  --- Alex Martelli
+
+#+END_QUOTE
+
+Wise words from a man who is not only a master of Python metaprogramming but also an accomplished software engineer working on some of the largest mission-critical Python deployments in the world.
+
+** Further Reading
+
+
+The essential references for this chapter in the Python documentation are [[http://bit.ly/1HGwGnI][“3.3.3. Customizing class creation”]] in the “Data Model” chapter of The Python Language Reference, the [[https://docs.python.org/3/library/functions.html#type][=type= class documentation]] in the “Built-in Functions” page, and [[http://bit.ly/1cPOodb][“4.13. Special Attributes”]] of the “Built-in Types” chapter in the /Library Reference/. Also, in the /Library Reference/, the [[http://bit.ly/1HGwF3b][=types= module documentation]] covers two functions that are new in Python 3.3 and are designed to help with class metaprogramming: =types.new_class(…)= and =types.prepare_class(…)=.
+
+Class decorators were formalized in [[http://bit.ly/1HGwIvW][PEP 3129 - Class Decorators]], written by Collin Winter, with the reference implementation authored by Jack Diederich. The PyCon 2009 talk “Class Decorators: Radically Simple” ([[http://bit.ly/1HGwJ2Y][video]]), also by Jack Diederich, is a quick introduction to the feature.
+
+/Python in a Nutshell, 2E/ by Alex Martelli features outstanding coverage of metaclasses, including a =metaMetaBunch= metaclass that aims to solve the same problem as our simple =record_factory= from [[file:ch21.html#record_factory_ex][Example 21-2]] but is much more sophisticated. Martelli does not address class decorators because the feature appeared later than his book. Beazley and Jones provide excellent examples of class decorators and metaclasses in their /Python Cookbook, 3E/ (O'Reilly). Michael Foord wrote an intriguing post titled [[http://bit.ly/1HGwMvx][“Meta-classes Made Easy: Eliminating self with Metaclasses”]]. The subtitle says it all.
+
+For metaclasses, the main references are [[https://www.python.org/dev/peps/pep-3115/][PEP 3115 --- Metaclasses in Python 3000]], in which the =__prepare__= special method was introduced and [[http://bit.ly/1HGwN2D][Unifying types and classes in Python 2.2]], authored by Guido van Rossum. The text applies to Python 3 as well, and it covers what were then called the “new-style” class semantics, including descriptors and metaclasses. It's a must-read. One of the references cited by Guido is /Putting Metaclasses to Work: a New Dimension in Object-Oriented Programming/, by Ira R. Forman and Scott H. Danforth (Addison-Wesley, 1998), a book to which he gave 5 stars on Amazon.com, adding the following review:
+
+#+BEGIN_QUOTE
+  *This book contributed to the design for metaclasses in Python 2.2*
+
+  Too bad this is out of print; I keep referring to it as the best tutorial I know for the difficult subject of cooperative multiple inheritance, supported by Python via the =super()= function.^{[[[#ftn.id1106799][199]]]}.
+#+END_QUOTE
+
+For Python 3.5---in alpha as I write this---[[https://www.python.org/dev/peps/pep-0487/][PEP 487 - Simpler customization of class creation]] puts forward a new special method, =__init_subclass__= that will allow a regular class (i.e., not a metaclass) to customize the initialization of its subclasses. As with class decorators, =__init_subclass__= will make class metaprogramming more accessible and also make it that much harder to justify the deployment of the nuclear option---metaclasses.
+
+If you are into metaprogramming, you may wish Python had the ultimate metaprogramming feature: syntactic macros, as offered by Elixir and the Lisp family of languages. Be careful what you wish for. I'll just say one word: [[https://github.com/lihaoyi/macropy][MacroPy]].
+
+Soapbox
+
+I will start the last soapbox in the book with a long quote from Brian Harvey and Matthew Wright, two computer science professors from the University of California (Berkeley and Santa Barbara). In their book, /Simply Scheme/, Harvey and Wright wrote:
+
+#+BEGIN_QUOTE
+  There are two schools of thought about teaching computer science. We might caricature the two views this way:
+
+  1. *The conservative view*: Computer programs have become too large and complex to encompass in a human mind. Therefore, the job of computer science education is to teach people how to discipline their work in such a way that 500 mediocre programmers can join together and produce a program that correctly meets its specification.
+  2. *The radical view*: Computer programs have become too large and complex to encompass in a human mind. Therefore, the job of computer science education is to teach people how to expand their minds so that the programs can fit, by learning to think in a vocabulary of larger, more powerful, more flexible ideas than the obvious ones. Each unit of programming thought must have a big payoff in the capabilities of the program.^{[[[#ftn.id1106911][200]]]}
+
+  --- Brian Harvey and Matthew Wright /Preface to Simply Scheme/
+
+#+END_QUOTE
+
+Harvey and Wright's exaggerated descriptions are about teaching computer science, but they also apply to programming language design. By now, you should have guessed that I subscribe to the “radical” view, and I believe Python was designed in that spirit.
+
+The property idea is a great step forward compared to the accessors-from-the-start approach practically demanded by Java and supported by Java IDEs generating getters/setters with a keyboard shortcut. The main advantage of properties is to let us start our programs simply exposing attributes as public---in the spirit of /KISS/---knowing a public attribute can become a property at any time without much pain. But the descriptor idea goes way beyond that, providing a framework for abstracting away repetitive accessor logic. That framework is so effective that essential Python constructs use it behind the scenes.
+
+Another powerful idea is functions as first-class objects, paving the way to higher-order functions. Turns out the combination of descriptors and higher-order functions enable the unification of functions and methods. A function's =__get__= produces a method object on the fly by binding the instance to the =self= argument. This is elegant.^{[[[#ftn.id1106968][201]]]}
+
+Finally, we have the idea of classes as first-class objects. It's an outstanding feat of design that a beginner-friendly language provides powerful abstractions such as class decorators and full-fledged, user-defined metaclasses. Best of all: the advanced features are integrated in a way that does not complicate Python's suitability for casual programming (they actually help it, under the covers). The convenience and success of frameworks such as Django and SQLAlchemy owes much to metaclasses, even if many users of these tools aren't aware of them. But they can always learn and create the next great library.
+
+I haven't yet found a language that manages to be easy for beginners, practical for professionals, and exciting for hackers in the way that Python is. Thanks, Guido van Rossum and everybody else who makes it so.
+
+
+
+--------------
+
+
+^{[[[#id1095122][194]]]} Message to comp.lang.python, subject: [[http://bit.ly/1e8iABS][“Acrimony in c.l.p.”]]. This is another part of the same message from December 23, 2002, quoted in the [[file:pr02.html][Preface]]. The TimBot was inspired that day.
+
+
+^{[[[#id1096316][195]]]} Thanks to my friend J.S. Bueno for suggesting this solution.
+
+
+^{[[[#id1099264][196]]]} Contrast with the =import= statement in Java, which is just a declaration to let the compiler know that certain packages are required.
+
+
+^{[[[#id1099321][197]]]} I'm not saying starting a database connection just because a module is imported is a good idea, only pointing out it can be done.
+
+
+^{[[[#id1105193][198]]]} Recall from [[file:ch11.html#abc_syntax_section][ABC Syntax Details]] that in Python 2.7 the =__metaclass__= class attribute is used, and the =metaclass== keyword argument is not supported in the class declaration.
+
+
+^{[[[#id1106799][199]]]} Amazon.com catalog page for [[http://amzn.to/1HGwKDO][/Putting Metaclasses to Work/.]] You can still buy it used. I bought it and found it a hard read, but I will probably go back to it later.
+
+
+^{[[[#id1106911][200]]]} Brian Harvey and Matthew Wright, /Simply Scheme/ (MIT Press, 1999), p. xvii. Full text available at [[https://www.eecs.berkeley.edu/~bh/ss-toc2.html][Berkeley.edu]].
+
+
+^{[[[#id1106968][201]]]} /Machine Beauty/ by David Gelernter (Basic Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+
+Message to comp.lang.python, subject: [[http://bit.ly/1e8iABS][“Acrimony in c.l.p.”]]. This is another part of the same message from December 23, 2002, quoted in the [[file:pr02.html][Preface]]. The TimBot was inspired that day.
+
+
+^{[[[#id1096316][195]]]} Thanks to my friend J.S. Bueno for suggesting this solution.
+
+
+^{[[[#id1099264][196]]]} Contrast with the =import= statement in Java, which is just a declaration to let the compiler know that certain packages are required.
+
+
+^{[[[#id1099321][197]]]} I'm not saying starting a database connection just because a module is imported is a good idea, only pointing out it can be done.
+
+
+^{[[[#id1105193][198]]]} Recall from [[file:ch11.html#abc_syntax_section][ABC Syntax Details]] that in Python 2.7 the =__metaclass__= class attribute is used, and the =metaclass== keyword argument is not supported in the class declaration.
+
+
+^{[[[#id1106799][199]]]} Amazon.com catalog page for [[http://amzn.to/1HGwKDO][/Putting Metaclasses to Work/.]] You can still buy it used. I bought it and found it a hard read, but I will probably go back to it later.
+
+
+^{[[[#id1106911][200]]]} Brian Harvey and Matthew Wright, /Simply Scheme/ (MIT Press, 1999), p. xvii. Full text available at [[https://www.eecs.berkeley.edu/~bh/ss-toc2.html][Berkeley.edu]].
+
+
+^{[[[#id1106968][201]]]} /Machine Beauty/ by David Gelernter (Basic Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+
+ Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+
+torage_name= to use the descriptor class name and the managed attribute name (e.g., =_NonBlank#description=).
+
+- [[#CO255-5][[[file:callouts/5.png]]]]  :: Return the modified class.
+
+The doctests in /bulkfood_v6.py/ prove that the changes are successful. For example, [[file:ch21.html#lineitem_class_v6_2][Example 21-5]] shows the names of the storage attributes in a =LineItem= instance.
+
+
+
+Example 21-5. bulkfood_v6.py: doctests for new storage_name descriptor attributes
+
+#+BEGIN_EXAMPLE
+        >>> raisins = LineItem('Golden raisins', 10, 6.95)
+        >>> dir(raisins)[:3]
+        ['_NonBlank#description', '_Quantity#price', '_Quantity#weight']
+        >>> LineItem.description.storage_name
+        '_NonBlank#description'
+        >>> raisins.description
+        'Golden raisins'
+        >>> getattr(raisins, '_NonBlank#description')
+        'Golden raisins'
+#+END_EXAMPLE
+
+That's not too complicated. Class decorators are a simpler way of doing something that previously required a metaclass: customizing a class the moment it's created.
+
+A significant drawback of class decorators is that they act only on the class where they are directly applied. This means subclasses of the decorated class may or may not inherit the changes made by the decorator, depending on what those changes are. We'll explore the problem and see how it's solved in the following sections.
+
+** What Happens When: Import Time Versus Runtime
+
+
+For successful metaprogramming, you must be aware of when the Python interpreter evaluates each block of code. Python programmers talk about “import time” versus “runtime” but the terms are not strictly defined and there is a gray area between them. At import time, the interpreter parses the source code of a /.py/ module in one pass from top to bottom, and generates the bytecode to be executed. That's when syntax errors may occur. If there is an up-to-date /.pyc/ file available in the local =__pycache__=, those steps are skipped because the bytecode is ready to run.
+
+Although compiling is definitely an import-time activity, other things may happen at that time, because almost every statement in Python is executable in the sense that they potentially run user code and change the state of the user program. In particular, the =import= statement is not merely a declaration^{[[[#ftn.id1099264][196]]]} but it actually runs all the top-level code of the imported module when it's imported for the first time in the process---further imports of the same module will use a cache, and only name binding occurs then. That top-level code may do anything, including actions typical of “runtime”, such as connecting to a database.^{[[[#ftn.id1099321][197]]]} That's why the border between “import time” and “runtime” is fuzzy: the =import= statement can trigger all sorts of “runtime” behavior.
+
+In the previous paragraph, I wrote that importing “runs all the top-level code,” but “top-level code” requires some elaboration. The interpreter executes a =def= statement on the top level of a module when the module is imported, but what does that achieve? The interpreter compiles the function body (if it's the first time that module is imported), and binds the function object to its global name, but it does not execute the body of the function, obviously. In the usual case, this means that the interpreter defines top-level functions at import time, but executes their bodies only when---and if---the functions are invoked at runtime.
+
+For classes, the story is different: at import time, the interpreter executes the body of every class, even the body of classes nested in other classes. Execution of a class body means that the attributes and methods of the class are defined, and then the class object itself is built. In this sense, the body of classes is “top-level code”: it runs at import time.
+
+This is all rather subtle and abstract, so here is an exercise to help you see what happens when.
+
+*** The Evaluation Time Exercises
+    :PROPERTIES:
+    :CUSTOM_ID: evaltime_exer_sec
+    :CLASS: title
+    :END:
+
+Consider a script, /evaltime.py/, which imports a module /evalsupport.py/. Both modules have several =print= calls to output markers in the format =<[N]>=, where =N= is a number. The goal of this pair of exercises is to determine when each of theses calls will be made.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note
+    :CLASS: title
+    :END:
+
+Students have reported these exercises are helpful to better appreciate how Python evaluates the source code. Do take the time to solve them with paper and pencil before looking at [[file:ch21.html#scenario_1_sol_sec][Solution for scenario #1]].
+
+The listings are Examples [[file:ch21.html#ex_evaltime][21-6]] and [[file:ch21.html#ex_evalsupport][21-7]]. Grab paper and pencil and---without running the code---write down the markers in the order they will appear in the output, in two scenarios:
+
+-  Scenario #1  :: The module /evaltime.py/ is imported interactively in the Python console:
+
+#+BEGIN_EXAMPLE
+    >>> import evaltime
+#+END_EXAMPLE
+
+-  Scenario #2  :: The module /evaltime.py/ is run from the command shell:
+
+#+BEGIN_EXAMPLE
+    $ python3 evaltime.py
+#+END_EXAMPLE
+
+
+
+Example 21-6. evaltime.py: write down the numbered <[N]> markers in the order they will appear in the output
+
+#+BEGIN_EXAMPLE
+    from evalsupport import deco_alpha
+
+    print('<[1]> evaltime module start')
+
+
+    class ClassOne():
+        print('<[2]> ClassOne body')
+
+        def __init__(self):
+            print('<[3]> ClassOne.__init__')
+
+        def __del__(self):
+            print('<[4]> ClassOne.__del__')
+
+        def method_x(self):
+            print('<[5]> ClassOne.method_x')
+
+        class ClassTwo(object):
+            print('<[6]> ClassTwo body')
+
+
+    @deco_alpha
+    class ClassThree():
+        print('<[7]> ClassThree body')
+
+        def method_y(self):
+            print('<[8]> ClassThree.method_y')
+
+
+    class ClassFour(ClassThree):
+        print('<[9]> ClassFour body')
+
+        def method_y(self):
+            print('<[10]> ClassFour.method_y')
+
+
+    if __name__ == '__main__':
+        print('<[11]> ClassOne tests', 30 * '.')
+        one = ClassOne()
+        one.method_x()
+        print('<[12]> ClassThree tests', 30 * '.')
+        three = ClassThree()
+        three.method_y()
+        print('<[13]> ClassFour tests', 30 * '.')
+        four = ClassFour()
+        four.method_y()
+
+
+    print('<[14]> evaltime module end')
+#+END_EXAMPLE
+
+
+
+Example 21-7. evalsupport.py: module imported by evaltime.py
+
+#+BEGIN_EXAMPLE
+    print('<[100]> evalsupport module start')
+
+    def deco_alpha(cls):
+        print('<[200]> deco_alpha')
+
+        def inner_1(self):
+            print('<[300]> deco_alpha:inner_1')
+
+        cls.method_y = inner_1
+        return cls
+
+    # BEGIN META_ALEPH
+    class MetaAleph(type):
+        print('<[400]> MetaAleph body')
+
+        def __init__(cls, name, bases, dic):
+            print('<[500]> MetaAleph.__init__')
+
+            def inner_2(self):
+                print('<[600]> MetaAleph.__init__:inner_2')
+
+            cls.method_z = inner_2
+    # END META_ALEPH
+
+    print('<[700]> evalsupport module end')
+#+END_EXAMPLE
+
+**** Solution for scenario #1
+     :PROPERTIES:
+     :CUSTOM_ID: scenario_1_sol_sec
+     :CLASS: title
+     :END:
+
+[[file:ch21.html#ex_evaltime_solution_1][Example 21-8]] is the output of importing the /evaltime.py/ module in the Python console.
+
+
+
+Example 21-8. Scenario #1: importing evaltime in the Python console
+
+#+BEGIN_EXAMPLE
+    >>> import evaltime
+    <[100]> evalsupport module start  
+    <[400]> MetaAleph body  
+    <[700]> evalsupport module end
+    <[1]> evaltime module start
+    <[2]> ClassOne body  
+    <[6]> ClassTwo body  
+    <[7]> ClassThree body
+    <[200]> deco_alpha  
+    <[9]> ClassFour body
+    <[14]> evaltime module end  
+#+END_EXAMPLE
+
+- [[#CO256-1][[[file:callouts/1.png]]]]  :: All top-level code in =evalsupport= runs when the module is imported; the =deco_alpha= function is compiled, but its body does not execute.
+
+- [[#CO256-2][[[file:callouts/2.png]]]]  :: The body of the =MetaAleph= function does run.
+
+- [[#CO256-3][[[file:callouts/3.png]]]]  :: The body of every class is executed...
+
+- [[#CO256-4][[[file:callouts/4.png]]]]  :: ...including nested classes.
+
+- [[#CO256-5][[[file:callouts/5.png]]]]  :: The decorator function runs after the body of the decorated =ClassThree= is evaluated.
+
+- [[#CO256-6][[[file:callouts/6.png]]]]  :: In this scenario, the =evaltime= is imported, so the =if __name__ == '__main__':= block never runs.
+
+Notes about scenario #1:
+
+1. This scenario is triggered by a simple =import evaltime= statement.
+2. The interpreter executes every class body of the imported module and its dependency, =evalsupport=.
+3. It makes sense that the interpreter evaluates the body of a decorated class before it invokes the decorator function that is attached on top of it: the decorator must get a class object to process, so the class object must be built first.
+4. The only user-defined function or method that runs in this scenario is the =deco_alpha= decorator.
+
+Now let's see what happens in scenario #2.
+
+**** Solution for scenario #2
+     :PROPERTIES:
+     :CUSTOM_ID: _solution_for_scenario_2
+     :CLASS: title
+     :END:
+
+[[file:ch21.html#ex_evaltime_solution_21][Example 21-9]] is the output of running =python evaltime.py=.
+
+
+
+Example 21-9. Scenario #2: running evaltime.py from the shell
+
+#+BEGIN_EXAMPLE
+    $ python3 evaltime.py
+    <[100]> evalsupport module start
+    <[400]> MetaAleph body
+    <[700]> evalsupport module end
+    <[1]> evaltime module start
+    <[2]> ClassOne body
+    <[6]> ClassTwo body
+    <[7]> ClassThree body
+    <[200]> deco_alpha
+    <[9]> ClassFour body  
+    <[11]> ClassOne tests ..............................
+    <[3]> ClassOne.__init__  
+    <[5]> ClassOne.method_x
+    <[12]> ClassThree tests ..............................
+    <[300]> deco_alpha:inner_1  
+    <[13]> ClassFour tests ..............................
+    <[10]> ClassFour.method_y
+    <[14]> evaltime module end
+    <[4]> ClassOne.__del__  
+#+END_EXAMPLE
+
+- [[#CO257-1][[[file:callouts/1.png]]]]  :: Same output as [[file:ch21.html#ex_evaltime_solution_1][Example 21-8]] so far.
+
+- [[#CO257-2][[[file:callouts/2.png]]]]  :: Standard behavior of a class.
+
+- [[#CO257-3][[[file:callouts/3.png]]]]  :: =ClassThree.method_y= was changed by the =deco_alpha= decorator, so the call =three.method_y()= runs the body of the =inner_1= function.
+
+- [[#CO257-4][[[file:callouts/4.png]]]]  :: The =ClassOne= instance bound to =one= global variable is garbage-collected only when the program ends.
+
+The main point of scenario #2 is to show that the effects of a class decorator may not affect subclasses. In [[file:ch21.html#ex_evaltime][Example 21-6]], =ClassFour= is defined as a subclass of =ClassThree=. The =@deco_alpha= decorator is applied to =ClassThree=, replacing its =method_y=, but that does not affect =ClassFour= at all. Of course, if the =ClassFour.method_y= did invoke the =ClassThree.method_y= with =super(…)=, we would see the effect of the decorator, as the =inner_1= function executed.
+
+In contrast, the next section will show that metaclasses are more effective when we want to customize a whole class hierarchy, and not one class at a time.
+
+** Metaclasses 101
+
+
+A metaclass is a class factory, except that instead of a function, like =record_factory= from [[file:ch21.html#record_factory_ex][Example 21-2]], a metaclass is written as a class. [[file:ch21.html#meta_class_and_class_mgn][Figure 21-1]] depicts a metaclass using the Mills & Gizmos Notation: a mill producing another mill.
+
+
+
+[[file:images/flup_2101.png.jpg]]
+
+Figure 21-1. A metaclass is a class that builds classes
+
+Consider the Python object model: classes are objects, therefore each class must be an instance of some other class. By default, Python classes are instances of =type=. In other words, =type= is the metaclass for most built-in and user-defined classes:
+
+#+BEGIN_EXAMPLE
+    >>> 'spam'.__class__
+    <class 'str'>
+    >>> str.__class__
+    <class 'type'>
+    >>> from bulkfood_v6 import LineItem
+    >>> LineItem.__class__
+    <class 'type'>
+    >>> type.__class__
+    <class 'type'>
+#+END_EXAMPLE
+
+To avoid infinite regress, =type= is an instance of itself, as the last line shows.
+
+Note that I am not saying that =str= or =LineItem= inherit from =type=. What I am saying is that =str= and =LineItem= are instances of =type=. They all are subclasses of =object=. [[file:ch21.html#class_hier_2tops_uml][Figure 21-2]] may help you confront this strange reality.
+
+
+
+[[file:images/flup_2102.png.jpg]]
+
+Figure 21-2. Both diagrams are true. The left one emphasizes that str, type, and LineItem are subclasses of object. The right one makes it clear that str, object, and LineItem are instances of type, because they are all classes.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-1
+    :CLASS: title
+    :END:
+
+The classes =object= and =type= have a unique relationship: =object= is an instance of =type=, and =type= is a subclass of =object=. This relationship is “magic”: it cannot be expressed in Python because either class would have to exist before the other could be defined. The fact that =type= is an instance of itself is also magical.
+
+Besides =type=, a few other metaclasses exist in the standard library, such as =ABCMeta= and =Enum=. The next snippet shows that the class of =collections.Iterable= is =abc.ABCMeta=. The class =Iterable= is abstract, but =ABCMeta= is not---after all, =Iterable= is an instance of =ABCMeta=:
+
+#+BEGIN_EXAMPLE
+    >>> import collections
+    >>> collections.Iterable.__class__
+    <class 'abc.ABCMeta'>
+    >>> import abc
+    >>> abc.ABCMeta.__class__
+    <class 'type'>
+    >>> abc.ABCMeta.__mro__
+    (<class 'abc.ABCMeta'>, <class 'type'>, <class 'object'>)
+#+END_EXAMPLE
+
+Ultimately, the class of =ABCMeta= is also =type=. Every class is an instance of =type=, directly or indirectly, but only metaclasses are also subclasses of =type=. That's the most important relationship to understand metaclasses: a metaclass, such as =ABCMeta=, inherits from =type= the power to construct classes. [[file:ch21.html#metaclass_abcmeta_uml][Figure 21-3]] illustrates this crucial relationship.
+
+
+
+[[file:images/flup_2103.png.jpg]]
+
+Figure 21-3. Iterable is a subclass of object and an instance of ABCMeta. Both object and ABCMeta are instances of type, but the key relationship here is that ABCMeta is also a subclass of type, because ABCMeta is a metaclass. In this diagram, Iterable is the only abstract class.
+
+The important takeaway here is that all classes are instances of =type=, but metaclasses are also subclasses of =type=, so they act as class factories. In particular, a metaclass can customize its instances by implementing =__init__=. A metaclass =__init__= method can do everything a class decorator can do, but its effects are more profound, as the next exercise demonstrates.
+
+*** The Metaclass Evaluation Time Exercise
+    :PROPERTIES:
+    :CUSTOM_ID: _the_metaclass_evaluation_time_exercise
+    :CLASS: title
+    :END:
+
+This is a variation of [[file:ch21.html#evaltime_exer_sec][The Evaluation Time Exercises]]. The /evalsupport.py/ module is the same as [[file:ch21.html#ex_evalsupport][Example 21-7]], but the main script is now /evaltime_meta.py/, listed in [[file:ch21.html#ex_evaltime_meta][Example 21-10]].
+
+
+
+Example 21-10. evaltime_meta.py: ClassFive is an instance of the MetaAleph metaclass
+
+#+BEGIN_EXAMPLE
+    from evalsupport import deco_alpha
+    from evalsupport import MetaAleph
+
+    print('<[1]> evaltime_meta module start')
+
+
+    @deco_alpha
+    class ClassThree():
+        print('<[2]> ClassThree body')
+
+        def method_y(self):
+            print('<[3]> ClassThree.method_y')
+
+
+    class ClassFour(ClassThree):
+        print('<[4]> ClassFour body')
+
+        def method_y(self):
+            print('<[5]> ClassFour.method_y')
+
+
+    class ClassFive(metaclass=MetaAleph):
+        print('<[6]> ClassFive body')
+
+        def __init__(self):
+            print('<[7]> ClassFive.__init__')
+
+        def method_z(self):
+            print('<[8]> ClassFive.method_y')
+
+
+    class ClassSix(ClassFive):
+        print('<[9]> ClassSix body')
+
+        def method_z(self):
+            print('<[10]> ClassSix.method_y')
+
+
+    if __name__ == '__main__':
+        print('<[11]> ClassThree tests', 30 * '.')
+        three = ClassThree()
+        three.method_y()
+        print('<[12]> ClassFour tests', 30 * '.')
+        four = ClassFour()
+        four.method_y()
+        print('<[13]> ClassFive tests', 30 * '.')
+        five = ClassFive()
+        five.method_z()
+        print('<[14]> ClassSix tests', 30 * '.')
+        six = ClassSix()
+        six.method_z()
+
+    print('<[15]> evaltime_meta module end')
+#+END_EXAMPLE
+
+Again, grab pencil and paper and write down the numbered =<[N]>= markers in the order they will appear in the output, considering these two scenarios:
+
+-  Scenario #3  :: The module /evaltime_meta.py/ is imported interactively in the Python console.
+-  Scenario #4  :: The module /evaltime_meta.py/ is run from the command shell.
+
+Solutions and analysis are next.
+
+**** Solution for scenario #3
+     :PROPERTIES:
+     :CUSTOM_ID: _solution_for_scenario_3
+     :CLASS: title
+     :END:
+
+[[file:ch21.html#ex_evaltime_solution_3][Example 21-11]] shows the output of importing /evaltime_meta.py/ in the Python console.
+
+
+
+Example 21-11. Scenario #3: importing evaltime_meta in the Python console
+
+#+BEGIN_EXAMPLE
+    >>> import evaltime_meta
+    <[100]> evalsupport module start
+    <[400]> MetaAleph body
+    <[700]> evalsupport module end
+    <[1]> evaltime_meta module start
+    <[2]> ClassThree body
+    <[200]> deco_alpha
+    <[4]> ClassFour body
+    <[6]> ClassFive body
+    <[500]> MetaAleph.__init__  
+    <[9]> ClassSix body
+    <[500]> MetaAleph.__init__  
+    <[15]> evaltime_meta module end
+#+END_EXAMPLE
+
+- [[#CO258-1][[[file:callouts/1.png]]]]  :: The key difference from scenario #1 is that the =MetaAleph.__init__= method is invoked to initialize the just-created =ClassFive=.
+
+- [[#CO258-2][[[file:callouts/2.png]]]]  :: And =MetaAleph.__init__= also initializes =ClassSix=, which is a subclass of =ClassFive=.
+
+The Python interpreter evaluates the body of =ClassFive= but then, instead of calling =type= to build the actual class body, it calls =MetaAleph=. Looking at the definition of =MetaAleph= in [[file:ch21.html#meta_aleph_ex][Example 21-12]], you'll see that the =__init__= method gets four arguments:
+
+-  =self=  :: That's the class object being initialized (e.g., =ClassFive=)
+-  =name=, =bases=, =dic=  :: The same arguments passed to =type= to build a class
+
+
+
+Example 21-12. evalsupport.py: definition of the metaclass MetaAleph from [[file:ch21.html#ex_evalsupport][Example 21-7]]
+
+#+BEGIN_EXAMPLE
+    class MetaAleph(type):
+        print('<[400]> MetaAleph body')
+
+        def __init__(cls, name, bases, dic):
+            print('<[500]> MetaAleph.__init__')
+
+            def inner_2(self):
+                print('<[600]> MetaAleph.__init__:inner_2')
+
+            cls.method_z = inner_2
+#+END_EXAMPLE
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-2
+    :CLASS: title
+    :END:
+
+When coding a metaclass, it's conventional to replace =self= with =cls=. For example, in the =__init__= method of the metaclass, using =cls= as the name of the first argument makes it clear that the instance under construction is a class.
+
+The body of =__init__= defines an =inner_2= function, then binds it to =cls.method_z=. The name =cls= in the signature of =MetaAleph.__init__= refers to the class being created (e.g., =ClassFive=). On the other hand, the name =self= in the signature of =inner_2= will eventually refer to an instance of the class we are creating (e.g., an instance of =ClassFive=).
+
+**** Solution for scenario #4
+     :PROPERTIES:
+     :CUSTOM_ID: _solution_for_scenario_4
+     :CLASS: title
+     :END:
+
+[[file:ch21.html#ex_evaltime_solution_2][Example 21-13]] shows the output of running =python evaltime.py= from the command line.
+
+
+
+Example 21-13. Scenario #4: running evaltime_meta.py from the shell
+
+#+BEGIN_EXAMPLE
+    $ python3 evaltime.py
+    <[100]> evalsupport module start
+    <[400]> MetaAleph body
+    <[700]> evalsupport module end
+    <[1]> evaltime_meta module start
+    <[2]> ClassThree body
+    <[200]> deco_alpha
+    <[4]> ClassFour body
+    <[6]> ClassFive body
+    <[500]> MetaAleph.__init__
+    <[9]> ClassSix body
+    <[500]> MetaAleph.__init__
+    <[11]> ClassThree tests ..............................
+    <[300]> deco_alpha:inner_1  
+    <[12]> ClassFour tests ..............................
+    <[5]> ClassFour.method_y  
+    <[13]> ClassFive tests ..............................
+    <[7]> ClassFive.__init__
+    <[600]> MetaAleph.__init__:inner_2  
+    <[14]> ClassSix tests ..............................
+    <[7]> ClassFive.__init__
+    <[600]> MetaAleph.__init__:inner_2  
+    <[15]> evaltime_meta module end
+#+END_EXAMPLE
+
+- [[#CO259-1][[[file:callouts/1.png]]]]  :: When the decorator is applied to =ClassThree=, its =method_y= is replaced by the =inner_1= method...
+
+- [[#CO259-2][[[file:callouts/2.png]]]]  :: But this has no effect on the undecorated =ClassFour=, even though =ClassFour= is a subclass of =ClassThree=.
+
+- [[#CO259-3][[[file:callouts/3.png]]]]  :: The =__init__= method of =MetaAleph= replaces =ClassFive.method_z= with its =inner_2= function.
+
+- [[#CO259-4][[[file:callouts/4.png]]]]  :: The same happens with the =ClassFive= subclass, =ClassSix=: its =method_z= is replaced by =inner_2=.
+
+Note that =ClassSix= makes no direct reference to =MetaAleph=, but it is affected by it because it's a subclass of =ClassFive= and therefore it is also an instance of =MetaAleph=, so it's initialized by =MetaAleph.__init__=.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip
+    :CLASS: title
+    :END:
+
+Further class customization can be done by implementing =__new__= in a metaclass. But more often than not, implementing =__init__= is enough.
+
+We can now put all this theory in practice by creating a metaclass to provide a definitive solution to the descriptors with automatic storage attribute names.
+
+** A Metaclass for Customizing Descriptors
+
+
+Back to the =LineItem= examples. It would be nice if the user did not have to be aware of decorators or metaclasses at all, and could just inherit from a class provided by our library, like in [[file:ch21.html#lineitem_class_v7][Example 21-14]].
+
+
+
+Example 21-14. bulkfood_v7.py: inheriting from model.Entity can work, if a metaclass is behind the scenes
+
+#+BEGIN_EXAMPLE
+    import model_v7 as model
+
+    class LineItem(model.Entity):   
+        description = model.NonBlank()
+        weight = model.Quantity()
+        price = model.Quantity()
+
+        def __init__(self, description, weight, price):
+            self.description = description
+            self.weight = weight
+            self.price = price
+
+        def subtotal(self):
+            return self.weight * self.price
+#+END_EXAMPLE
+
+- [[#CO260-1][[[file:callouts/1.png]]]]  :: =LineItem= is a subclass of =model.Entity=.
+
+[[file:ch21.html#lineitem_class_v7][Example 21-14]] looks pretty harmless. No strange syntax to be seen at all. However, it only works because /model_v7.py/ defines a metaclass, and =model.Entity= is an instance of that metaclass. [[file:ch21.html#model_v7][Example 21-15]] shows the implementation of the =Entity= class in the /model_v7.py/ module.
+
+
+
+Example 21-15. model_v7.py: the EntityMeta metaclass and one instance of it, Entity
+
+#+BEGIN_EXAMPLE
+    class EntityMeta(type):
+        """Metaclass for business entities with validated fields"""
+
+        def __init__(cls, name, bases, attr_dict):
+            super().__init__(name, bases, attr_dict)   
+            for key, attr in attr_dict.items():   
+                if isinstance(attr, Validated):
+                    type_name = type(attr).__name__
+                    attr.storage_name = '_{}#{}'.format(type_name, key)
+
+    class Entity(metaclass=EntityMeta):   
+        """Business entity with validated fields"""
+#+END_EXAMPLE
+
+- [[#CO261-1][[[file:callouts/1.png]]]]  :: Call =__init__= on the superclass (=type= in this case).
+
+- [[#CO261-2][[[file:callouts/2.png]]]]  :: Same logic as the =@entity= decorator in [[file:ch21.html#model_v6][Example 21-4]].
+
+- [[#CO261-3][[[file:callouts/3.png]]]]  :: This class exists for convenience only: the user of this module can just subclass =Entity= and not worry about =EntityMeta=---or even be aware of its existence.
+
+The code in [[file:ch21.html#lineitem_class_v7][Example 21-14]] passes the tests in [[file:ch21.html#lineitem_class_v6][Example 21-3]]. The support module, /model_v7.py/, is harder to understand than /model_v6.py/, but the user-level code is simpler: just inherit from =model_v7.entity= and you get custom storage names for your =Validated= fields.
+
+[[file:ch21.html#lineitem7_uml_mgn][Figure 21-4]] is a simplified depiction of what we just implemented. There is a lot going on, but the complexity is hidden inside the =model_v7= module. From the user perspective, =LineItem= is simply a subclass of =Entity=, as coded in [[file:ch21.html#lineitem_class_v7][Example 21-14]]. This is the power of abstraction.
+
+
+
+[[file:images/flup_2104.png.jpg]]
+
+Figure 21-4. UML class diagram annotated with MGN (Mills & Gizmos Notation): the EntityMeta meta-mill builds the LineItem mill. Configuration of the descriptors (e.g., weight and price) is done by EntityMeta.__init__. Note the package boundary of model_v7.
+
+Except for the syntax for linking a class to the metaclass,^{[[[#ftn.id1105193][198]]]} everything written so far about metaclasses applies to versions of Python as early as 2.2, when Python types underwent a major overhaul. The next section covers a feature that is only available in Python 3.
+
+** The Metaclass __prepare__ Special Method
+
+
+In some applications it's interesting to be able to know the order in which the attributes of a class are defined. For example, a library to read/write CSV files driven by user-defined classes may want to map the order of the fields declared in the class to the order of the columns in the CSV file.
+
+As we've seen, both the =type= constructor and the =__new__= and =__init__= methods of metaclasses receive the body of the class evaluated as a mapping of names to attributes. However, by default, that mapping is a =dict=, which means the order of the attributes as they appear in the class body is lost by the time our metaclass or class decorator can look at them.
+
+The solution to this problem is the =__prepare__= special method, introduced in Python 3. This special method is relevant only in metaclasses, and it must be a class method (i.e., defined with the =@classmethod= decorator). The =__prepare__= method is invoked by the interpreter before the =__new__= method in the metaclass to create the mapping that will be filled with the attributes from the class body. Besides the metaclass as first argument, =__prepare__= gets the name of the class to be constructed and its tuple of base classes, and it must return a mapping, which will be received as the last argument by =__new__= and then =__init__= when the metaclass builds a new class.
+
+It sounds complicated in theory, but in practice, every time I've seen =__prepare__= being used it was very simple. Take a look at [[file:ch21.html#model_v8][Example 21-16]].
+
+
+
+Example 21-16. model_v8.py: the EntityMeta metaclass uses /prepare/, and Entity now has a field_names class method
+
+#+BEGIN_EXAMPLE
+    class EntityMeta(type):
+        """Metaclass for business entities with validated fields"""
+
+        @classmethod
+        def __prepare__(cls, name, bases):
+            return collections.OrderedDict()   
+
+        def __init__(cls, name, bases, attr_dict):
+            super().__init__(name, bases, attr_dict)
+            cls._field_names = []   
+            for key, attr in attr_dict.items():   
+                if isinstance(attr, Validated):
+                    type_name = type(attr).__name__
+                    attr.storage_name = '_{}#{}'.format(type_name, key)
+                    cls._field_names.append(key)   
+
+
+    class Entity(metaclass=EntityMeta):
+        """Business entity with validated fields"""
+
+        @classmethod
+        def field_names(cls):   
+            for name in cls._field_names:
+                yield name
+#+END_EXAMPLE
+
+- [[#CO262-1][[[file:callouts/1.png]]]]  :: Return an empty =OrderedDict= instance, where the class attributes will be stored.
+
+- [[#CO262-2][[[file:callouts/2.png]]]]  :: Create a =_field_names= attribute in the class under construction.
+
+- [[#CO262-3][[[file:callouts/3.png]]]]  :: This line is unchanged from the previous version, but =attr_dict= here is the =OrderedDict= obtained by the interpreter when it called =__prepare__= before calling =__init__=. Therefore, this =for= loop will go over the attributes in the order they were added.
+
+- [[#CO262-4][[[file:callouts/4.png]]]]  :: Add the name of each =Validated= field found to =_field_names=.
+
+- [[#CO262-5][[[file:callouts/5.png]]]]  :: The =field_names= class method simply yields the names of the fields in the order they were added.
+
+With the simple additions made in [[file:ch21.html#model_v8][Example 21-16]], we are now able to iterate over the =Validated= fields of any =Entity= subclass using the =field_names= class method. [[file:ch21.html#model_v8_2][Example 21-17]] demonstrates this new feature.
+
+
+
+Example 21-17. bulkfood_v8.py: doctest showing the use of field_names---no changes are needed in the LineItem class; field_names is inherited from model.Entity
+
+#+BEGIN_EXAMPLE
+        >>> for name in LineItem.field_names():
+        ...     print(name)
+        ...
+        description
+        weight
+        price
+#+END_EXAMPLE
+
+This wraps up our coverage of metaclasses. In the real world, metaclasses are used in frameworks and libraries that help programmers perform, among other tasks:
+
+- Attribute validation
+- Applying decorators to many methods at once
+- Object serialization or data conversion
+- Object-relational mapping
+- Object-based persistency
+- Dynamic translation of class structures from other languages
+
+We'll now have a brief overview of methods defined in the Python data model for all classes.
+
+** Classes as Objects
+
+
+Every class has a number of attributes defined in the Python data model, documented in [[http://bit.ly/1cPOodb][“4.13. Special Attributes”]] of the “Built-in Types” chapter in the /Library Reference/. Three of those attributes we've seen several times in the book already: =__mro__=, =__class__=, and =__name__=. Other class attributes are:
+
+-  =cls.__bases__=  :: The tuple of base classes of the class.
+-  =cls.__qualname__=  :: A new attribute in Python 3.3 holding the qualified name of a class or function, which is a dotted path from the global scope of the module to the class definition. For example, in [[file:ch21.html#ex_evaltime][Example 21-6]], the =__qualname__= of the inner class =ClassTwo= is the string ='ClassOne.ClassTwo'=, while its =__name__= is just ='ClassTwo'=. The specification for this attribute is [[http://www.python.org/dev/peps/pep-3155][PEP-3155 --- Qualified name for classes and functions]].
+-  =cls.__subclasses__()=  :: This method returns a list of the immediate subclasses of the class. The implementation uses weak references to avoid circular references between the superclass and its subclasses---which hold a strong reference to the superclasses in their =__bases__= attribute. The method returns the list of subclasses that currently exist in memory.
+-  =cls.mro()=  :: The interpreter calls this method when building a class to obtain the tuple of superclasses that is stored in the =__mro__= attribute of the class. A metaclass can override this method to customize the method resolution order of the class under construction.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-1
+    :CLASS: title
+    :END:
+
+None of the attributes mentioned in this section are listed by the =dir(…)= function.
+
+With this, our study of class metaprogramming ends. This is a vast topic and I only scratched the surface. That's why we have “Further Reading” sections in this book.
+
+** Chapter Summary
+
+
+Class metaprogramming is about creating or customizing classes dynamically. Classes in Python are first-class objects, so we started the chapter by showing how a class can be created by a function invoking the =type= built-in metaclass.
+
+In the next section, we went back to the =LineItem= class with descriptors from [[file:ch20.html][Chapter 20]] to solve a lingering issue: how to generate names for the storage attributes that reflected the names of the managed attributes (e.g., =_Quantity#price= instead of =_Quantity#1=). The solution was to use a class decorator, essentially a function that gets a just-built class and has the opportunity to inspect it, change it, and even replace it with a different class.
+
+We then moved to a discussion of when different parts of the source code of a module actually run. We saw that there is some overlap between the so-called “import time” and “runtime,” but clearly a lot of code runs triggered by the =import= statement. Understanding what runs when is crucial, and there are some subtle rules, so we used the evaluation-time exercises to cover this topic.
+
+The following subject was an introduction to metaclasses. We saw that all classes are instances of =type=, directly or indirectly, so that is the “root metaclass” of the language. A variation of the evaluation-time exercise was designed to show that a metaclass can customize a hierarchy of classes---in contrast with a class decorator, which affects a single class and may have no impact on its descendants.
+
+The first practical application of a metaclass was to solve the issue of the storage attribute names in =LineItem=. The resulting code is a bit trickier than the class decorator solution, but it can be encapsulated in a module so that the user merely subclasses an apparently plain class (=model.Entity=) without being aware that it is an instance of a custom metaclass (=model.EntityMeta=). The end result is reminiscent of the ORM APIs in Django and SQLAlchemy, which use metaclasses in their implementations but don't require the user to know anything about them.
+
+The second metaclass we implemented added a small feature to =model.EntityMeta=: a =__prepare__= method to provide an =OrderedDict= to serve as the mapping from names to attributes. This preserves the order in which those attributes are bound in the body of the class under construction, so that metaclass methods like =__new__= and =__init__= can use that information. In the example, we implemented a =_field_names= class attribute, which made possible an =Entity.field_names()= so users could retrieve the =Validated= descriptors in the same order they appear in the source code.
+
+The last section was a brief overview of attributes and methods available in all Python classes.
+
+Metaclasses are challenging, exciting, and---sometimes---abused by programmers trying to be too clever. To wrap up, let's recall Alex Martelli's final advice from his essay [[file:ch11.html#waterfowl_essay][Waterfowl and ABCs]]:
+
+#+BEGIN_QUOTE
+  And, /don't/ define custom ABCs (or metaclasses) in production code... if you feel the urge to do so, I'd bet it's likely to be a case of “all problems look like a nail”-syndrome for somebody who just got a shiny new hammer---you (and future maintainers of your code) will be much happier sticking with straightforward and simple code, eschewing such depths.
+
+  --- Alex Martelli
+
+#+END_QUOTE
+
+Wise words from a man who is not only a master of Python metaprogramming but also an accomplished software engineer working on some of the largest mission-critical Python deployments in the world.
+
+** Further Reading
+
+
+The essential references for this chapter in the Python documentation are [[http://bit.ly/1HGwGnI][“3.3.3. Customizing class creation”]] in the “Data Model” chapter of The Python Language Reference, the [[https://docs.python.org/3/library/functions.html#type][=type= class documentation]] in the “Built-in Functions” page, and [[http://bit.ly/1cPOodb][“4.13. Special Attributes”]] of the “Built-in Types” chapter in the /Library Reference/. Also, in the /Library Reference/, the [[http://bit.ly/1HGwF3b][=types= module documentation]] covers two functions that are new in Python 3.3 and are designed to help with class metaprogramming: =types.new_class(…)= and =types.prepare_class(…)=.
+
+Class decorators were formalized in [[http://bit.ly/1HGwIvW][PEP 3129 - Class Decorators]], written by Collin Winter, with the reference implementation authored by Jack Diederich. The PyCon 2009 talk “Class Decorators: Radically Simple” ([[http://bit.ly/1HGwJ2Y][video]]), also by Jack Diederich, is a quick introduction to the feature.
+
+/Python in a Nutshell, 2E/ by Alex Martelli features outstanding coverage of metaclasses, including a =metaMetaBunch= metaclass that aims to solve the same problem as our simple =record_factory= from [[file:ch21.html#record_factory_ex][Example 21-2]] but is much more sophisticated. Martelli does not address class decorators because the feature appeared later than his book. Beazley and Jones provide excellent examples of class decorators and metaclasses in their /Python Cookbook, 3E/ (O'Reilly). Michael Foord wrote an intriguing post titled [[http://bit.ly/1HGwMvx][“Meta-classes Made Easy: Eliminating self with Metaclasses”]]. The subtitle says it all.
+
+For metaclasses, the main references are [[https://www.python.org/dev/peps/pep-3115/][PEP 3115 --- Metaclasses in Python 3000]], in which the =__prepare__= special method was introduced and [[http://bit.ly/1HGwN2D][Unifying types and classes in Python 2.2]], authored by Guido van Rossum. The text applies to Python 3 as well, and it covers what were then called the “new-style” class semantics, including descriptors and metaclasses. It's a must-read. One of the references cited by Guido is /Putting Metaclasses to Work: a New Dimension in Object-Oriented Programming/, by Ira R. Forman and Scott H. Danforth (Addison-Wesley, 1998), a book to which he gave 5 stars on Amazon.com, adding the following review:
+
+#+BEGIN_QUOTE
+  *This book contributed to the design for metaclasses in Python 2.2*
+
+  Too bad this is out of print; I keep referring to it as the best tutorial I know for the difficult subject of cooperative multiple inheritance, supported by Python via the =super()= function.^{[[[#ftn.id1106799][199]]]}.
+#+END_QUOTE
+
+For Python 3.5---in alpha as I write this---[[https://www.python.org/dev/peps/pep-0487/][PEP 487 - Simpler customization of class creation]] puts forward a new special method, =__init_subclass__= that will allow a regular class (i.e., not a metaclass) to customize the initialization of its subclasses. As with class decorators, =__init_subclass__= will make class metaprogramming more accessible and also make it that much harder to justify the deployment of the nuclear option---metaclasses.
+
+If you are into metaprogramming, you may wish Python had the ultimate metaprogramming feature: syntactic macros, as offered by Elixir and the Lisp family of languages. Be careful what you wish for. I'll just say one word: [[https://github.com/lihaoyi/macropy][MacroPy]].
+
+Soapbox
+
+I will start the last soapbox in the book with a long quote from Brian Harvey and Matthew Wright, two computer science professors from the University of California (Berkeley and Santa Barbara). In their book, /Simply Scheme/, Harvey and Wright wrote:
+
+#+BEGIN_QUOTE
+  There are two schools of thought about teaching computer science. We might caricature the two views this way:
+
+  1. *The conservative view*: Computer programs have become too large and complex to encompass in a human mind. Therefore, the job of computer science education is to teach people how to discipline their work in such a way that 500 mediocre programmers can join together and produce a program that correctly meets its specification.
+  2. *The radical view*: Computer programs have become too large and complex to encompass in a human mind. Therefore, the job of computer science education is to teach people how to expand their minds so that the programs can fit, by learning to think in a vocabulary of larger, more powerful, more flexible ideas than the obvious ones. Each unit of programming thought must have a big payoff in the capabilities of the program.^{[[[#ftn.id1106911][200]]]}
+
+  --- Brian Harvey and Matthew Wright /Preface to Simply Scheme/
+
+#+END_QUOTE
+
+Harvey and Wright's exaggerated descriptions are about teaching computer science, but they also apply to programming language design. By now, you should have guessed that I subscribe to the “radical” view, and I believe Python was designed in that spirit.
+
+The property idea is a great step forward compared to the accessors-from-the-start approach practically demanded by Java and supported by Java IDEs generating getters/setters with a keyboard shortcut. The main advantage of properties is to let us start our programs simply exposing attributes as public---in the spirit of /KISS/---knowing a public attribute can become a property at any time without much pain. But the descriptor idea goes way beyond that, providing a framework for abstracting away repetitive accessor logic. That framework is so effective that essential Python constructs use it behind the scenes.
+
+Another powerful idea is functions as first-class objects, paving the way to higher-order functions. Turns out the combination of descriptors and higher-order functions enable the unification of functions and methods. A function's =__get__= produces a method object on the fly by binding the instance to the =self= argument. This is elegant.^{[[[#ftn.id1106968][201]]]}
+
+Finally, we have the idea of classes as first-class objects. It's an outstanding feat of design that a beginner-friendly language provides powerful abstractions such as class decorators and full-fledged, user-defined metaclasses. Best of all: the advanced features are integrated in a way that does not complicate Python's suitability for casual programming (they actually help it, under the covers). The convenience and success of frameworks such as Django and SQLAlchemy owes much to metaclasses, even if many users of these tools aren't aware of them. But they can always learn and create the next great library.
+
+I haven't yet found a language that manages to be easy for beginners, practical for professionals, and exciting for hackers in the way that Python is. Thanks, Guido van Rossum and everybody else who makes it so.
+
+
+
+--------------
+
+
+^{[[[#id1095122][194]]]} Message to comp.lang.python, subject: [[http://bit.ly/1e8iABS][“Acrimony in c.l.p.”]]. This is another part of the same message from December 23, 2002, quoted in the [[file:pr02.html][Preface]]. The TimBot was inspired that day.
+
+
+^{[[[#id1096316][195]]]} Thanks to my friend J.S. Bueno for suggesting this solution.
+
+
+^{[[[#id1099264][196]]]} Contrast with the =import= statement in Java, which is just a declaration to let the compiler know that certain packages are required.
+
+
+^{[[[#id1099321][197]]]} I'm not saying starting a database connection just because a module is imported is a good idea, only pointing out it can be done.
+
+
+^{[[[#id1105193][198]]]} Recall from [[file:ch11.html#abc_syntax_section][ABC Syntax Details]] that in Python 2.7 the =__metaclass__= class attribute is used, and the =metaclass== keyword argument is not supported in the class declaration.
+
+
+^{[[[#id1106799][199]]]} Amazon.com catalog page for [[http://amzn.to/1HGwKDO][/Putting Metaclasses to Work/.]] You can still buy it used. I bought it and found it a hard read, but I will probably go back to it later.
+
+
+^{[[[#id1106911][200]]]} Brian Harvey and Matthew Wright, /Simply Scheme/ (MIT Press, 1999), p. xvii. Full text available at [[https://www.eecs.berkeley.edu/~bh/ss-toc2.html][Berkeley.edu]].
+
+
+^{[[[#id1106968][201]]]} /Machine Beauty/ by David Gelernter (Basic Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+
+Message to comp.lang.python, subject: [[http://bit.ly/1e8iABS][“Acrimony in c.l.p.”]]. This is another part of the same message from December 23, 2002, quoted in the [[file:pr02.html][Preface]]. The TimBot was inspired that day.
+
+
+^{[[[#id1096316][195]]]} Thanks to my friend J.S. Bueno for suggesting this solution.
+
+
+^{[[[#id1099264][196]]]} Contrast with the =import= statement in Java, which is just a declaration to let the compiler know that certain packages are required.
+
+
+^{[[[#id1099321][197]]]} I'm not saying starting a database connection just because a module is imported is a good idea, only pointing out it can be done.
+
+
+^{[[[#id1105193][198]]]} Recall from [[file:ch11.html#abc_syntax_section][ABC Syntax Details]] that in Python 2.7 the =__metaclass__= class attribute is used, and the =metaclass== keyword argument is not supported in the class declaration.
+
+
+^{[[[#id1106799][199]]]} Amazon.com catalog page for [[http://amzn.to/1HGwKDO][/Putting Metaclasses to Work/.]] You can still buy it used. I bought it and found it a hard read, but I will probably go back to it later.
+
+
+^{[[[#id1106911][200]]]} Brian Harvey and Matthew Wright, /Simply Scheme/ (MIT Press, 1999), p. xvii. Full text available at [[https://www.eecs.berkeley.edu/~bh/ss-toc2.html][Berkeley.edu]].
+
+
+^{[[[#id1106968][201]]]} /Machine Beauty/ by David Gelernter (Basic Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+
+ Books) is an intriguing short book about elegance and aesthetics in works of engineering, from bridges to software.
+
+

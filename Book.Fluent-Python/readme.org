@@ -1,0 +1,70 @@
+#+ATTR_HTML: :width 300px
+[[file:fluent-images/cover.png.jpg]]
+
+** Convert to .Org
+#+begin_src ipython :session fluent :results output
+import os
+import glob
+import subprocess
+htmls = glob.glob("ch*.html")
+print(htmls)
+# htmls.sort(key=lambda x: int(x[2:4]))
+for html in htmls:
+    cmd = f"pandoc --wrap=none {html} -o {html.replace('html', 'org')}"
+    subprocess.Popen(cmd, shell=True)
+#+end_src
+
+#+RESULTS:
+: ['ch05.html', 'ch20.html', 'ch11.html', 'ch15.html', 'ch08.html', 'ch03.html', 'ch13.html', 'ch09.html', 'ch04.html', 'ch06.html', 'ch07.html', 'ch21.html', 'ch18.html', 'ch01.html', 'ch12.html', 'ch02.html', 'ch14.html', 'ch10.html', 'ch17.html', 'ch16.html', 'ch19.html']
+
+** Clear Up
+#+begin_src ipython :session fluent :results none
+import re
+import glob
+
+
+def clearup(filename):
+    fp = open(filename, "r+")
+    text = fp.read()
+    text = re.sub(r"\\", "", text)
+    text = re.sub(r"<<.+>>", "", text)
+    text = re.sub(r".*:PROPERTIES:.*\n.*:CUSTOM_ID:.*\n.*:CLASS:.*\n.*:style:.*\n.*:END:.*", "",
+            text)
+    text = re.sub(r".*:PROPERTIES:\n(?:.*\n)*.*:END:", "", text)
+
+    text = re.sub(r"\*(\d\.\d)\*", "\g<1>", text)
+    text = re.sub(r"\[\[.*Click here to view code image.*\]",   "", text)
+    text = re.sub(r"\*\[\[.*\]\[([0-9]\.[0-9]*)\]\]\*", "\g<1>", text)
+    # print(text[:100])
+    fp.seek(0)
+    fp.write(text)
+    fp.close()
+
+clearup("ch12.org")
+
+# orgs = glob.glob("*.org")
+
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src ipython :session fluent :results output
+orgs = glob.glob("*.org")
+orgs.remove("00.cover.org")
+# print(orgs)
+for org in orgs:
+    clearup(org)
+
+#+end_src
+
+#+RESULTS:
+** Rename orgs
+
+** Publish
+#+begin_src ipython :session fluent :results output
+!git init
+!git add .; git commit -m "publish"
+!git remote add origin git@github.com:alinbxSorcerer/Fluent-Python-with-Notes.git
+!git push -u origin master
+#+end_src

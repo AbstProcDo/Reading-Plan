@@ -1,0 +1,1042 @@
+* Chapter 9. A Pythonic Object
+
+#+BEGIN_QUOTE
+  Never, ever use two leading underscores. This is annoyingly private.^{[[[#ftn.id626734][49]]]}
+
+  --- Ian Bicking /Creator of pip, virtualenv, Paste and many other projects/
+
+#+END_QUOTE
+
+Thanks to the Python data model, your user-defined types can behave as naturally as the built-in types. And this can be accomplished without inheritance, in the spirit of /duck typing/: you just implement the methods needed for your objects to behave as expected.
+
+In previous chapters, we presented the structure and behavior of many built-in objects. We will now build user-defined classes that behave as real Python objects.
+
+This chapter starts where [[file:ch01.html][Chapter 1]] ended, by showing how to implement several special methods that are commonly seen in Python objects of many different types.
+
+In this chapter, we will see how to:
+
+- Support the built-in functions that produce alternative object representations (e.g., =repr()=, =bytes()=, etc).
+- Implement an alternative constructor as a class method.
+- Extend the format mini-language used by the =format()= built-in and the =str.format()= method.
+- Provide read-only access to attributes.
+- Make an object hashable for use in sets and as =dict= keys.
+- Save memory with the use of =__slots__=.
+
+We'll do all that as we develop a simple two-dimensional Euclidean vector type.
+
+The evolution of the example will be paused to discuss two conceptual topics:
+
+- How and when to use the =@classmethod= and =@staticmethod= decorators.
+- Private and protected attributes in Python: usage, conventions, and limitations.
+
+Let's get started with the object representation methods.
+
+** Object Representations
+
+
+Every object-oriented language has at least one standard way of getting a string representation from any object. Python has two:
+
+-  =repr()=  :: Return a string representing the object as the developer wants to see it.
+-  =str()=  :: Return a string representing the object as the user wants to see it.
+
+As you know, we implement the special methods =__repr__= and =__str__= to support =repr()= and =str()=.
+
+There are two additional special methods to support alternative representations of objects: =__bytes__= and =__format__=. The =__bytes__= method is analogous to =__str__=: it's called by =bytes()= to get the object represented as a byte sequence. Regarding =__format__=, both the built-in function =format()= and the =str.format()= method call it to get string displays of objects using special formatting codes. We'll cover =__bytes__= in the next example, and =__format__= after that.
+
+*** Warning
+
+
+We are discussing adding a custom instance attribute, therefore [[file:ch09.html#typecode_instance_demo][Example 9-13]] uses the =Vector2d= implementation without =__slots__= as listed in [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]].
+
+
+
+Example 9-13. Customizing an instance by setting the typecode attribute that was formerly inherited from the class
+
+#+BEGIN_EXAMPLE
+    >>> from vector2d_v3 import Vector2d
+    >>> v1 = Vector2d(1.1, 2.2)
+    >>> dumpd = bytes(v1)
+    >>> dumpd
+    b'dx9ax99x99x99x99x99xf1?x9ax99x99x99x99x99x01@'
+    >>> len(dumpd)  # 
+    17
+    >>> v1.typecode = 'f'  # 
+    >>> dumpf = bytes(v1)
+    >>> dumpf
+    b'fxcdxccx8c?xcdxccx0c@'
+    >>> len(dumpf)  # 
+    9
+    >>> Vector2d.typecode  # 
+    'd'
+#+END_EXAMPLE
+
+- [[#CO107-1][[[file:callouts/1.png]]]]  :: Default =bytes= representation is 17 bytes long.
+
+- [[#CO107-2][[[file:callouts/2.png]]]]  :: Set =typecode= to ='f'= in the =v1= instance.
+
+- [[#CO107-3][[[file:callouts/3.png]]]]  :: Now the =bytes= dump is 9 bytes long.
+
+- [[#CO107-4][[[file:callouts/4.png]]]]  :: =Vector2d.typecode= is unchanged; only the =v1= instance uses =typecode= ='f'=.
+
+Now it should be clear why the =bytes= export of a =Vector2d= is prefixed by the =typecode=: we wanted to support different export formats.
+
+If you want to change a class attribute you must set it on the class directly, not through an instance. You could change the default =typecode= for all instances (that don't have their own =typecode=) by doing this:
+
+#+BEGIN_EXAMPLE
+    >>> Vector2d.typecode = 'f'
+#+END_EXAMPLE
+
+However, there is an idiomatic Python way of achieving a more permanent effect, and being more explicit about the change. Because class attributes are public, they are inherited by subclasses, so it's common practice to subclass just to customize a class data attribute. The Django class-based views use this technique extensively. [[file:ch09.html#typecode_subclass_demo][Example 9-14]] shows how.
+
+
+
+Example 9-14. The ShortVector2d is a subclass of Vector2d, which only overwrites the default typecode
+
+#+BEGIN_EXAMPLE
+    >>> from vector2d_v3 import Vector2d
+    >>> class ShortVector2d(Vector2d):  # 
+    ...     typecode = 'f'
+    ...
+    >>> sv = ShortVector2d(1/11, 1/27)  # 
+    >>> sv
+    ShortVector2d(0.09090909090909091, 0.037037037037037035)  # 
+    >>> len(bytes(sv))  # 
+    9
+#+END_EXAMPLE
+
+- [[#CO108-1][[[file:callouts/1.png]]]]  :: Create =ShortVector2d= as a =Vector2d= subclass just to overwrite the =typecode= class attribute.
+
+- [[#CO108-2][[[file:callouts/2.png]]]]  :: Build =ShortVector2d= instance =sv= for demonstration.
+
+- [[#CO108-3][[[file:callouts/3.png]]]]  :: Inspect the =repr= of =sv=.
+
+- [[#CO108-4][[[file:callouts/4.png]]]]  :: Check that the length of the exported bytes is 9, not 17 as before.
+
+This example also explains why I did not hardcode the =class_name= in =Vecto2d.__repr__=, but instead got it from =type(self).__name__=, like this:
+
+#+BEGIN_EXAMPLE
+        # inside class Vector2d:
+
+        def __repr__(self):
+            class_name = type(self).__name__
+            return '{}({!r}, {!r})'.format(class_name, *self)
+#+END_EXAMPLE
+
+If I had hardcoded the =class_name=, subclasses of =Vector2d= like =ShortVector2d= would have to overwrite =__repr__= just to change the =class_name=. By reading the name from the =type= of the instance, I made =__repr__= safer to inherit.
+
+This ends our coverage of implementing a simple class that leverages the data model to play well with the rest of Python---offering different object representations, implementing a custom formatting code, exposing read-only attributes, and supporting =hash()= to integrate with sets and mappings.
+
+** Chapter Summary
+
+
+The aim of this chapter was to demonstrate the use of special methods and conventions in the construction of a well-behaved Pythonic class.
+
+Is /vector2d_v3.py/ ([[file:ch09.html#ex_vector2d_v3_full][Example 9-9]]) more Pythonic than /vector2d_v0.py/ ([[file:ch09.html#ex_vector2d_v0][Example 9-2]])? The =Vector2d= class in /vector2d_v3.py/ certainly exhibits more Python features. But whether the first or the last =Vector2d= implementation is more idiomatic depends on the context where it would be used. Tim Peter's Zen of Python says:
+
+#+BEGIN_QUOTE
+  Simple is better than complex.
+#+END_QUOTE
+
+A Pythonic object should be as simple as the requirements allow---and not a parade of language features.
+
+But my goal in expanding the =Vector2d= code was to provide context for discussing Python special methods and coding conventions. If you look back at [[file:ch01.html#special_names_tbl][Table 1-1]], the several listings in this chapter demonstrated:
+
+- All string/bytes representation methods: =__repr__=, =__str__=, =__format__=, and =__bytes__=.
+- Several methods for converting an object to a number: =__abs__=, =__bool__=, =__hash__=.
+- The =__eq__= operator, to test =bytes= conversion and to enable hashing (along with =__hash__=).
+
+While supporting conversion to =bytes= we also implemented an alternative constructor, =Vector2d.frombytes()=, which provided the context for discussing the decorators =@classmethod= (very handy) and =@staticmethod= (not so useful, module-level functions are simpler). The =frombytes= method was inspired by it's namesake in the =array.array= class.
+
+We saw that the [[https://docs.python.org/3/library/string.html#formatspec][Format Specification Mini-Language]] is extensible by implementing a =__format__= method that does some minimal parsing of =format_spec= provided to the =format(obj, format_spec)= built-in or within replacement fields ='{:«format_spec»}'= in strings used with the =str.format= method.
+
+In preparation to make =Vector2d= instances hashable, we made an effort to make them immutable, at least preventing accidental changes by coding the =x= and =y= attributes as private, and exposing them as read-only properties. We then implemented =__hash__= using the recommended technique of xor-ing the hashes of the instance attributes.
+
+We then discussed the memory savings and the caveats of declaring a =__slots__= attribute in =Vector2d=. Because using =__slots__= is somewhat tricky, it really makes sense only when handling a very large number of instances---think millions of instances, not just thousands.
+
+The last topic we covered was the overriding of a class attribute accessed via the instances (e.g., =self.typecode=). We did that first by creating an instance attribute, and then by subclassing and overwriting at the class level.
+
+Throughout the chapter, I mentioned how design choices in the examples were informed by studying the API of standard Python objects. If this chapter can be summarized in one sentence, this is it:
+
+#+BEGIN_QUOTE
+  To build Pythonic objects, observe how real Python objects behave.
+
+  --- Ancient Chinese proverb
+
+#+END_QUOTE
+
+** Further Reading
+
+
+This chapter covered several special methods of the data model, so naturally the primary references are the same as the ones provided in [[file:ch01.html][Chapter 1]], which gave a high-level view of the same topic. For convenience, I'll repeat those four earlier recommendations here, and add a few other ones:
+
+-  [[http://bit.ly/1GsZwss][“Data Model” chapter]] of The Python Language Reference  :: Most of the methods we used in this chapter are documented in [[http://bit.ly/1Vma6b2][“3.3.1. Basic customization”]].
+-  /[[http://shop.oreilly.com/product/9780596100469.do][Python in a Nutshell, 2nd Edition]]/, by Alex Martelli  :: Excellent coverage of the data model, even if only Python 2.5 is covered (in the second edition). The fundamental concepts are all the same and most of the Data Model APIs haven't changed at all since Python 2.2, when built-in types and user-defined classes became more compatible.
+-  /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, 3rd Edition]]/, by David Beazley and Brian K. Jones  :: Very modern coding practices demonstrated through recipes. Chapter 8, “Classes and Objects” in particular has several solutions related to discussions in this chapter.
+-  /Python Essential Reference, 4th Edition/, by David Beazley  :: Covers the data model in detail in the context of Python 2.6 and Python 3.
+
+In this chapter, we covered every special method related to object representation, except =__index__=. It's used to coerce an object to an integer index in the specific context of sequence slicing, and was created to solve a need in NumPy. In practice, you and I are not likely to need to implement =__index__= unless we decide to write a new numeric data type, and we want it to be usable as arguments to =__getitem__=. If you are curious about it, A.M. Kuchling's [[https://docs.python.org/2.5/whatsnew/pep-357.html][What's New in Python 2.5]] has a short explanation, and [[https://www.python.org/dev/peps/pep-0357/][PEP 357 --- Allowing Any Object to be Used for Slicing]] details the need for =__index__=, from the perspective of an implementor of a C-extension, Travis Oliphant, the lead author of NumPy.
+
+An early realization of the need for distinct string representations for objects appeared in Smalltalk. The 1996 article [[http://bit.ly/1IIKX6t][“How to Display an Object as a String: printString and displayString”]] by Bobby Woolf discusses the implementation of the =printString= and =displayString= methods in that language. From that article, I borrowed the pithy descriptions “the way the developer wants to see it” and “the way the user wants to see it” when defining =repr()= and =str()= in [[file:ch09.html#object_repr_sec][Object Representations]].
+
+
+
+Soapbox
+
+*Properties Help Reduce Upfront Costs*
+
+In the initial versions of =Vector2d=, the =x= and =y= attributes were public, as are all Python instance and class attributes by default. Naturally, users of vectors need to be able to access its components. Although our vectors are iterable and can be unpacked into a pair of variables, it's also desirable to be able to write =my_vector.x= and =my_vector.y= to get each component.
+
+When we felt the need to avoid accidental updates to the =x= and =y= attributes, we implemented properties, but nothing changed elsewhere in the code and in the public interface of =Vector2d=, as verified by the doctests. We are still able to access =my_vector.x= and =my_vector.y=.
+
+This shows that we can always start our classes in the simplest possible way, with public attributes, because when (or if) we later need to impose more control with getters and setters, these can be implemented through properties without changing any of the code that already interacts with our objects through the names (e.g., =x= and =y=) that were initially simple public attributes.
+
+This approach is the opposite of that encouraged by the Java language: a Java programmer cannot start with simple public attributes and only later, if needed, implement properties, because they don't exist in the language. Therefore, writing getters and setters is the norm in Java---even when those methods do nothing useful---because the API cannot evolve from simple public attributes to getters and setters without breaking all code that uses those attributes.
+
+In addition, as our technical reviewer Alex Martelli points out, typing getter/setter calls everywhere is goofy. You have to write stuff like:
+
+#+BEGIN_EXAMPLE
+    ---
+    >>> my_object.set_foo(my_object.get_foo() + 1)
+    ---
+#+END_EXAMPLE
+
+Just to do this:
+
+#+BEGIN_EXAMPLE
+    ---
+    >>> my_object.foo += 1
+    ---
+#+END_EXAMPLE
+
+Ward Cunningham, inventor of the wiki and an Extreme Programming pioneer, recommends asking “What's the simplest thing that could possibly work?” The idea is to focus on the goal.^{[[[#ftn.id923698][59]]]} Implementing setters and getters up front is a distraction from the goal. In Python, we can simply use public attributes knowing we can change them to properties later, if the need arises.
+
+*Safety Versus Security in Private Attributes*
+
+#+BEGIN_QUOTE
+  Perl doesn't have an infatuation with enforced privacy. It would prefer that you stayed out of its living room because you weren't invited, not because it has a shotgun.
+
+  --- Larry Wall /Creator of Perl/
+
+#+END_QUOTE
+
+Python and Perl are polar opposites in many regards, but Larry and Guido seem to agree on object privacy.
+
+Having taught Python to many Java programmers over the years, I've found a lot of them put too much faith in the privacy guarantees that Java offers. As it turns out, the Java =private= and =protected= modifiers normally provide protection against accidents only (i.e., safety). They can only guarantee security against malicious intent if the application is deployed with a security manager, and that seldom happens in practice, even in corporate settings.
+
+To prove my point, I like to show this Java class ([[file:ch09.html#ex_java_confidential_class][Example 9-15]]).
+
+
+
+Example 9-15. Confidential.java: a Java class with a private field named secret
+
+#+BEGIN_EXAMPLE
+    public class Confidential {
+
+        private String secret = "";
+
+        public Confidential(String text) {
+            secret = text.toUpperCase();
+        }
+    }
+#+END_EXAMPLE
+
+In [[file:ch09.html#ex_java_confidential_class][Example 9-15]], I store the =text= in the =secret= field after converting it to uppercase, just to make it obvious that whatever is in that field will be in all caps.
+
+The actual demonstration consists of running /expose.py/ with Jython. That script uses introspection (“reflection” in Java parlance) to get the value of a private field. The code is in [[file:ch09.html#ex_expose_py][Example 9-16]].
+
+
+
+Example 9-16. expose.py: Jython code to read the content of a private field in another class
+
+#+BEGIN_EXAMPLE
+    import Confidential
+
+    message = Confidential('top secret text')
+    secret_field = Confidential.getDeclaredField('secret')
+    secret_field.setAccessible(True)  # break the lock!
+    print 'message.secret =', secret_field.get(message)
+#+END_EXAMPLE
+
+If you run [[file:ch09.html#ex_expose_py][Example 9-16]], this is what you get:
+
+#+BEGIN_EXAMPLE
+    $ jython expose.py
+    message.secret = TOP SECRET TEXT
+#+END_EXAMPLE
+
+The string ='TOP SECRET TEXT'= was read from the =secret= private field of the =Confidential= class.
+
+There is no black magic here: /expose.py/ uses the Java reflection API to get a reference to the private field named ='secret'=, and then calls ='secret_field.setAccessible(True)'= to make it readable. The same thing can be done with Java code, of course (but it takes more than three times as many lines to do it; see the file /Expose.java/ in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]]).
+
+The crucial call =.setAccessible(True)= will fail only if the Jython script or the Java main program (e.g., =Expose.class=) is running under the supervision of a [[http://bit.ly/1IIMdqd][SecurityManager]]. But in the real world, Java applications are rarely deployed with a SecurityManager---except for Java applets (remember those?).
+
+My point is: in Java too, access control modifiers are mostly about safety and not security, at least in practice. So relax and enjoy the power Python gives you. Use it responsibly.
+
+
+
+--------------
+
+
+^{[[[#id626734][49]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id713703][50]]]} I used =eval= to clone the object here just to make a point about =repr=; to clone an instance, the =copy.copy= function is safer and faster.
+
+
+^{[[[#id800684][51]]]} This line could also be written as =yield self.x; yield.self.y=. I have a lot more to say about the =__iter__= special method, generator expressions, and the =yield= keyword in [[file:ch14.html][Chapter 14]].
+
+
+^{[[[#id1006766][52]]]} We had a brief introduction to =memoryview=, explaining its =.cast= method in [[file:ch02.html#memoryview_sec][Memory Views]].
+
+
+^{[[[#id685029][53]]]} Leonardo Rochael, one of the technical reviewers of this book disagrees with my low opinion of =staticmethod=, and recommends the blog post [[http://bit.ly/1FSFTW6][“The Definitive Guide on How to Use Static, Class or Abstract Methods in Python”]] by Julien Danjou as a counter-argument. Danjou's post is very good; I do recommend it. But it wasn't enough to change my mind about =staticmethod=. You'll have to decide for yourself.
+
+
+^{[[[#id911094][54]]]} This is not how Ian Bicking would do it; recall the quote at the start of the chapter. The pros and cons of private attributes are the subject of the upcoming [[file:ch09.html#private_protected_sec][Private and “Protected” Attributes in Python]].
+
+
+^{[[[#id877038][55]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id493754][56]]]} In modules, a single =_= in front of a top-level name does have an effect: if you write =from mymod import *= the names with a =_= prefix are not imported from =mymod=. However, you can still write =from mymod import _privatefunc=. This is explained in the [[http://bit.ly/1Gt95rp][Python Tutorial, section 6.1. More on Modules]].
+
+
+^{[[[#id514392][57]]]} One example is in the [[http://bit.ly/1Gt9cDg][gettext module docs]].
+
+
+^{[[[#id898908][58]]]} If this state of affairs depresses you, and makes you wish Python was more like Java in this regard, don't read my discussion of the relative strength of the Java =private= modifier in [[file:ch09.html#pythonic_soapbox][Soapbox]].
+
+
+^{[[[#id923698][59]]]} See [[http://www.artima.com/intv/simplest3.html][“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+
+one of the technical reviewers of this book disagrees with my low opinion of =staticmethod=, and recommends the blog post [[http://bit.ly/1FSFTW6][“The Definitive Guide on How to Use Static, Class or Abstract Methods in Python”]] by Julien Danjou as a counter-argument. Danjou's post is very good; I do recommend it. But it wasn't enough to change my mind about =staticmethod=. You'll have to decide for yourself.
+
+
+^{[[[#id911094][54]]]} This is not how Ian Bicking would do it; recall the quote at the start of the chapter. The pros and cons of private attributes are the subject of the upcoming [[file:ch09.html#private_protected_sec][Private and “Protected” Attributes in Python]].
+
+
+^{[[[#id877038][55]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id493754][56]]]} In modules, a single =_= in front of a top-level name does have an effect: if you write =from mymod import *= the names with a =_= prefix are not imported from =mymod=. However, you can still write =from mymod import _privatefunc=. This is explained in the [[http://bit.ly/1Gt95rp][Python Tutorial, section 6.1. More on Modules]].
+
+
+^{[[[#id514392][57]]]} One example is in the [[http://bit.ly/1Gt9cDg][gettext module docs]].
+
+
+^{[[[#id898908][58]]]} If this state of affairs depresses you, and makes you wish Python was more like Java in this regard, don't read my discussion of the relative strength of the Java =private= modifier in [[file:ch09.html#pythonic_soapbox][Soapbox]].
+
+
+^{[[[#id923698][59]]]} See [[http://www.artima.com/intv/simplest3.html][“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+
+“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+
+ the code to suggest that changing a =Vector2d= is forbidden. This is the behavior we want:
+
+#+BEGIN_EXAMPLE
+    >>> v1.x, v1.y
+    (3.0, 4.0)
+    >>> v1.x = 7
+    Traceback (most recent call last):
+      ...
+    AttributeError: can't set attribute
+#+END_EXAMPLE
+
+We'll do that by making the =x= and =y= components read-only properties in [[file:ch09.html#ex_vector2d_v3][Example 9-7]].
+
+
+
+Example 9-7. vector2d_v3.py: only the changes needed to make Vector2d immutable are shown here; see full listing in [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]]
+
+#+BEGIN_EXAMPLE
+    class Vector2d:
+        typecode = 'd'
+
+        def __init__(self, x, y):
+            self.__x = float(x)   
+            self.__y = float(y)
+
+        @property   
+        def x(self):   
+            return self.__x   
+
+        @property   
+        def y(self):
+            return self.__y
+
+        def __iter__(self):
+            return (i for i in (self.x, self.y))   
+
+        # remaining methods follow (omitted in book listing)
+#+END_EXAMPLE
+
+- [[#CO106-1][[[file:callouts/1.png]]]]  :: Use exactly two leading underscores (with zero or one trailing underscore) to make an attribute private.^{[[[#ftn.id911094][54]]]}
+
+- [[#CO106-2][[[file:callouts/2.png]]]]  :: The =@property= decorator marks the getter method of a property.
+
+- [[#CO106-3][[[file:callouts/3.png]]]]  :: The getter method is named after the public property it exposes: =x=.
+
+- [[#CO106-4][[[file:callouts/4.png]]]]  :: Just return =self.__x=.
+
+- [[#CO106-5][[[file:callouts/5.png]]]]  :: Repeat same formula for =y= property.
+
+- [[#CO106-6][[[file:callouts/6.png]]]]  :: Every method that just reads the =x=, =y= components can stay as they were, reading the public properties via =self.x= and =self.y= instead of the private attribute, so this listing omits the rest of the code for the class.
+
+*** Note
+    :PROPERTIES:
+    :CUSTOM_ID: note-1
+    :CLASS: title
+    :END:
+
+=Vector.x= and =Vector.y= are examples of read-only properties. Read/write properties will be covered in [[file:ch19.html][Chapter 19]], where we dive deeper into the =@property=.
+
+Now that our vectors are reasonably immutable, we can implement the =__hash__= method. It should return an =int= and ideally take into account the hashes of the object attributes that are also used in the =__eq__= method, because objects that compare equal should have the same hash. The =__hash__= special method [[https://docs.python.org/3/reference/datamodel.html][documentation]] suggests using the bitwise XOR operator (=^=) to mix the hashes of the components, so that's what we do. The code for our =Vector2d.__hash__= method is really simple, as shown in [[file:ch09.html#ex_vector2d_v3_hash][Example 9-8]].
+
+
+
+Example 9-8. vector2d_v3.py: implementation of /hash/
+
+#+BEGIN_EXAMPLE
+        # inside class Vector2d:
+
+        def __hash__(self):
+            return hash(self.x) ^ hash(self.y)
+#+END_EXAMPLE
+
+With the addition of the =__hash__= method, we now have hashable vectors:
+
+#+BEGIN_EXAMPLE
+    >>> v1 = Vector2d(3, 4)
+    >>> v2 = Vector2d(3.1, 4.2)
+    >>> hash(v1), hash(v2)
+    (7, 384307168202284039)
+    >>> set([v1, v2])
+    {Vector2d(3.1, 4.2), Vector2d(3.0, 4.0)}
+#+END_EXAMPLE
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-2
+    :CLASS: title
+    :END:
+
+It's not strictly necessary to implement properties or otherwise protect the instance attributes to create a hashable type. Implementing =__hash__= and =__eq__= correctly is all it takes. But the hash value of an instance is never supposed to change, so this provides an excellent opportunity to talk about read-only properties.
+
+If you are creating a type that has a sensible scalar numeric value, you may also implement the =__int__= and =__float__= methods, invoked by the =int()= and =float()= constructors---which are used for type coercion in some contexts. There's also a =__complex__= method to support the =complex()= built-in constructor. Perhaps =Vector2d= should provide =__complex__=, but I'll leave that as an exercise for you.
+
+We have been working on =Vector2d= for a while, showing just snippets, so [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]] is a consolidated, full listing of /vector2d_v3.py/, including all the doctests I used when developing it.
+
+
+
+Example 9-9. vector2d_v3.py: the full monty
+
+#+BEGIN_EXAMPLE
+    """
+    A two-dimensional vector class
+
+        >>> v1 = Vector2d(3, 4)
+        >>> print(v1.x, v1.y)
+        3.0 4.0
+        >>> x, y = v1
+        >>> x, y
+        (3.0, 4.0)
+        >>> v1
+        Vector2d(3.0, 4.0)
+        >>> v1_clone = eval(repr(v1))
+        >>> v1 == v1_clone
+        True
+        >>> print(v1)
+        (3.0, 4.0)
+        >>> octets = bytes(v1)
+        >>> octets
+        b'dx00x00x00x00x00x00x08@x00x00x00x00x00x00x10@'
+        >>> abs(v1)
+        5.0
+        >>> bool(v1), bool(Vector2d(0, 0))
+        (True, False)
+
+
+    Test of ``.frombytes()`` class method:
+
+        >>> v1_clone = Vector2d.frombytes(bytes(v1))
+        >>> v1_clone
+        Vector2d(3.0, 4.0)
+        >>> v1 == v1_clone
+        True
+
+
+    Tests of ``format()`` with Cartesian coordinates:
+
+        >>> format(v1)
+        '(3.0, 4.0)'
+        >>> format(v1, '.2f')
+        '(3.00, 4.00)'
+        >>> format(v1, '.3e')
+        '(3.000e+00, 4.000e+00)'
+
+
+    Tests of the ``angle`` method::
+
+        >>> Vector2d(0, 0).angle()
+        0.0
+        >>> Vector2d(1, 0).angle()
+        0.0
+        >>> epsilon = 10**-8
+        >>> abs(Vector2d(0, 1).angle() - math.pi/2) < epsilon
+        True
+        >>> abs(Vector2d(1, 1).angle() - math.pi/4) < epsilon
+        True
+
+
+    Tests of ``format()`` with polar coordinates:
+
+        >>> format(Vector2d(1, 1), 'p')  # doctest:+ELLIPSIS
+        '<1.414213..., 0.785398...>'
+        >>> format(Vector2d(1, 1), '.3ep')
+        '<1.414e+00, 7.854e-01>'
+        >>> format(Vector2d(1, 1), '0.5fp')
+        '<1.41421, 0.78540>'
+
+
+    Tests of `x` and `y` read-only properties:
+
+        >>> v1.x, v1.y
+        (3.0, 4.0)
+        >>> v1.x = 123
+        Traceback (most recent call last):
+          ...
+        AttributeError: can't set attribute
+
+
+    Tests of hashing:
+
+        >>> v1 = Vector2d(3, 4)
+        >>> v2 = Vector2d(3.1, 4.2)
+        >>> hash(v1), hash(v2)
+        (7, 384307168202284039)
+        >>> len(set([v1, v2]))
+        2
+
+    """
+
+    from array import array
+    import math
+
+    class Vector2d:
+        typecode = 'd'
+
+        def __init__(self, x, y):
+            self.__x = float(x)
+            self.__y = float(y)
+
+        @property
+        def x(self):
+            return self.__x
+
+        @property
+        def y(self):
+            return self.__y
+
+        def __iter__(self):
+            return (i for i in (self.x, self.y))
+
+        def __repr__(self):
+            class_name = type(self).__name__
+            return '{}({!r}, {!r})'.format(class_name, *self)
+
+        def __str__(self):
+            return str(tuple(self))
+
+        def __bytes__(self):
+            return (bytes([ord(self.typecode)]) +
+                    bytes(array(self.typecode, self)))
+
+        def __eq__(self, other):
+            return tuple(self) == tuple(other)
+
+        def __hash__(self):
+            return hash(self.x) ^ hash(self.y)
+
+        def __abs__(self):
+            return math.hypot(self.x, self.y)
+
+        def __bool__(self):
+            return bool(abs(self))
+
+        def angle(self):
+            return math.atan2(self.y, self.x)
+
+        def __format__(self, fmt_spec=''):
+            if fmt_spec.endswith('p'):
+                fmt_spec = fmt_spec[:-1]
+                coords = (abs(self), self.angle())
+                outer_fmt = '<{}, {}>'
+            else:
+                coords = self
+                outer_fmt = '({}, {})'
+            components = (format(c, fmt_spec) for c in coords)
+            return outer_fmt.format(*components)
+
+        @classmethod
+        def frombytes(cls, octets):
+            typecode = chr(octets[0])
+            memv = memoryview(octets[1:]).cast(typecode)
+            return cls(*memv)
+#+END_EXAMPLE
+
+To recap, in this and the previous sections, we saw some essential special methods that you may want to implement to have a full-fledged object. Of course, it is a bad idea to implement all of these methods if your application has no real use for them. Customers don't care if your objects are “Pythonic” or not.
+
+As coded in [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]], =Vector2d= is a didactic example with a laundry list of special methods related to object representation, not a template for every user-defined class.
+
+In the next section, we'll take a break from =Vector2d= to discuss the design and drawbacks of the private attribute mechanism in Python---the double-underscore prefix in =self.__x=.
+
+** Private and “Protected” Attributes in Python
+
+
+In Python, there is no way to create private variables like there is with the =private= modifier in Java. What we have in Python is a simple mechanism to prevent accidental overwriting of a “private” attribute in a subclass.
+
+Consider this scenario: someone wrote a class named =Dog= that uses a =mood= instance attribute internally, without exposing it. You need to subclass =Dog= as =Beagle=. If you create your own =mood= instance attribute without being aware of the name clash, you will clobber the =mood= attribute used by the methods inherited from =Dog=. This would be a pain to debug.
+
+To prevent this, if you name an instance attribute in the form =__mood= (two leading underscores and zero or at most one trailing underscore), Python stores the name in the instance =__dict__= prefixed with a leading underscore and the class name, so in the =Dog= class, =__mood= becomes =_Dog__mood=, and in =Beagle= it's =_Beagle__mood=. This language feature goes by the lovely name of /name mangling/.
+
+[[file:ch09.html#name_mangling_ex][Example 9-10]] shows the result in the =Vector2d= class from [[file:ch09.html#ex_vector2d_v3][Example 9-7]].
+
+
+
+Example 9-10. Private attribute names are “mangled” by prefixing the _ and the class name
+
+#+BEGIN_EXAMPLE
+    >>> v1 = Vector2d(3, 4)
+    >>> v1.__dict__
+    {'_Vector2d__y': 4.0, '_Vector2d__x': 3.0}
+    >>> v1._Vector2d__x
+    3.0
+#+END_EXAMPLE
+
+Name mangling is about safety, not security: it's designed to prevent accidental access and not intentional wrongdoing ([[file:ch09.html#safety_fig][Figure 9-1]] illustrates another safety device).
+
+
+
+[[file:images/flup_0901.png.jpg]]
+
+Figure 9-1. A cover on a switch is a /safety/ device, not a /security/ one: it prevents accidental activation, not malicious use
+
+Anyone who knows how private names are mangled can read the private attribute directly, as the last line of [[file:ch09.html#name_mangling_ex][Example 9-10]] shows---that's actually useful for debugging and serialization. They can also directly assign a value to a private component of a =Vector2d= by simply writing =v1._Vector__x = 7=. But if you are doing that in production code, you can't complain if something blows up.
+
+The name mangling functionality is not loved by all Pythonistas, and neither is the skewed look of names written as =self.__x=. Some prefer to avoid this syntax and use just one underscore prefix to “protect” attributes by convention (e.g., =self._x=). Critics of the automatic double-underscore mangling suggest that concerns about accidental attribute clobbering should be addressed by naming conventions. This is the full quote from the prolific Ian Bicking, cited at the beginning of this chapter:
+
+#+BEGIN_QUOTE
+  Never, ever use two leading underscores. This is annoyingly private. If name clashes are a concern, use explicit name mangling instead (e.g., =_MyThing_blahblah=). This is essentially the same thing as double-underscore, only it's transparent where double underscore obscures.^{[[[#ftn.id877038][55]]]}
+#+END_QUOTE
+
+The single underscore prefix has no special meaning to the Python interpreter when used in attribute names, but it's a very strong convention among Python programmers that you should not access such attributes from outside the class.^{[[[#ftn.id493754][56]]]} It's easy to respect the privacy of an object that marks its attributes with a single =_=, just as it's easy respect the convention that variables in =ALL_CAPS= should be treated as constants.
+
+Attributes with a single =_= prefix are called “protected” in some corners of the Python documentation.^{[[[#ftn.id514392][57]]]} The practice of “protecting” attributes by convention with the form =self._x= is widespread, but calling that a “protected” attribute is not so common. Some even call that a “private” attribute.
+
+To conclude: the =Vector2d= components are “private” and our =Vector2d= instances are “immutable”---with scare quotes---because there is no way to make them really private and immutable.^{[[[#ftn.id898908][58]]]}
+
+We'll now come back to our =Vector2d= class. In this final section, we cover a special attribute (not a method) that affects the internal storage of an object, with potentially huge impact on the use of memory but little effect on its public interface: =__slots__=.
+
+** Saving Space with the __slots__ Class Attribute
+
+
+By default, Python stores instance attributes in a per-instance =dict= named =__dict__=. As we saw in [[file:ch03.html#consequences-dict-internals][Practical Consequences of How dict Works]], dictionaries have a significant memory overhead because of the underlying hash table used to provide fast access. If you are dealing with millions of instances with few attributes, the =__slots__= class attribute can save a lot of memory, by letting the interpreter store the instance attributes in a =tuple= instead of a =dict=.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-2
+    :CLASS: title
+    :END:
+
+A =__slots__= attribute inherited from a superclass has no effect. Python only takes into account =__slots__= attributes defined in each class individually.
+
+To define =__slots__=, you create a class attribute with that name and assign it an iterable of =str= with identifiers for the instance attributes. I like to use a =tuple= for that, because it conveys the message that the =__slots__= definition cannot change. See [[file:ch09.html#ex_vector2d_v3_slots][Example 9-11]].
+
+
+
+Example 9-11. vector2d_v3_slots.py: the /slots/ attribute is the only addition to Vector2d
+
+#+BEGIN_EXAMPLE
+    class Vector2d:
+        __slots__ = ('__x', '__y')
+
+        typecode = 'd'
+
+        # methods follow (omitted in book listing)
+#+END_EXAMPLE
+
+By defining =__slots__= in the class, you are telling the interpreter: “These are all the instance attributes in this class.” Python then stores them in a tuple-like structure in each instance, avoiding the memory overhead of the per-instance =__dict__=. This can make a huge difference in memory usage if your have millions of instances active at the same time.
+
+*** Tip
+    :PROPERTIES:
+    :CUSTOM_ID: tip-3
+    :CLASS: title
+    :END:
+
+If you are handling millions of objects with numeric data, you should really be using NumPy arrays (see [[file:ch02.html#numpy_sec][NumPy and SciPy]]), which are not only memory-efficient but have highly optimized functions for numeric processing, many of which operate on the entire array at once. I designed the =Vector2d= class just to provide context when discussing special methods, because I try to avoid vague =foo= and =bar= examples when I can.
+
+[[file:ch09.html#mem_test_demo][Example 9-12]] shows two runs of a script that simply builds a =list=, using a list comprehension, with 10,000,000 instances of =Vector2d=. The /mem_test.py/ script takes the name of a module with a =Vector2d= class variant as command-line argument. In the first run, I am using =vector2d_v3.Vector2d= (from [[file:ch09.html#ex_vector2d_v3][Example 9-7]]); in the second run, the =__slots__= version of =vector2d_v3_slots.Vector2d= is used.
+
+
+
+Example 9-12. mem_test.py creates 10 million Vector2d instances using the class defined in the named module (e.g., vector2d_v3.py)
+
+#+BEGIN_EXAMPLE
+    $ time python3 mem_test.py vector2d_v3.py
+    Selected Vector2d type: vector2d_v3.Vector2d
+    Creating 10,000,000 Vector2d instances
+    Initial RAM usage:      5,623,808
+      Final RAM usage:  1,558,482,944
+
+    real  0m16.721s
+    user  0m15.568s
+    sys 0m1.149s
+    $ time python3 mem_test.py vector2d_v3_slots.py
+    Selected Vector2d type: vector2d_v3_slots.Vector2d
+    Creating 10,000,000 Vector2d instances
+    Initial RAM usage:      5,718,016
+      Final RAM usage:    655,466,496
+
+    real  0m13.605s
+    user  0m13.163s
+    sys 0m0.434s
+#+END_EXAMPLE
+
+As [[file:ch09.html#mem_test_demo][Example 9-12]] reveals, the RAM footprint of the script grows to 1.5 GB when instance =__dict__= is used in each of the 10 million =Vector2d= instances, but that is reduced to 655 MB when =Vector2d= has a =__slots__= attribute. The =__slots__= version is also faster. The /mem_test.py/ script in this test basically deals with loading a module, checking memory usage, and formatting results. The code is not really relevant here so it's in [[file:apa.html][Appendix A]], [[file:apa.html#support_memtest][Example A-4]].
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-3
+    :CLASS: title
+    :END:
+
+When =__slots__= is specified in a class, its instances will not be allowed to have any other attributes apart from those named in =__slots__=. This is really a side effect, and not the reason why =__slots__= exists. It's considered bad form to use =__slots__= just to prevent users of your class from creating new attributes in the instances if they want to. =__slots__= should used for optimization, not for programmer restraint.
+
+It may be possible, however, to “save memory and eat it too”: if you add the ='__dict__'= name to the =__slots__= list, your instances will keep attributes named in =__slots__= in the per-instance tuple, but will also support dynamically created attributes, which will be stored in the usual =__dict__=. Of course, having ='__dict__'= in =__slots__= may entirely defeat its purpose, depending on the number of static and dynamic attributes in each instance and how they are used. Careless optimization is even worse than premature optimization.
+
+There is another special per-instance attribute that you may want to keep: the =__weakref__= attribute is necessary for an object to support weak references (covered in [[file:ch08.html#weakref_sec][Weak References]]). That attribute is present by default in instances of user-defined classes. However, if the class defines =__slots__=, and you need the instances to be targets of weak references, then you need to include ='__weakref__'= among the attributes named in =__slots__=.
+
+To summarize, =__slots__= has some caveats and should not be abused just for the sake of limiting what attributes can be assigned by users. It is mostly useful when working with tabular data such as database records where the schema is fixed by definition and the datasets may be very large. However, if you do this kind of work often, you must check out not only [[http://www.numpy.org][NumPy]], but also [[http://pandas.pydata.org][the pandas data analysis library]], which can handle nonnumeric data and import/export to many different tabular data formats.
+
+*** The Problems with __slots__
+    :PROPERTIES:
+    :CUSTOM_ID: problems_with_slots
+    :CLASS: title
+    :END:
+
+To summarize, =__slots__= may provide significant memory savings if properly used, but there are a few caveats:
+
+- You must remember to redeclare =__slots__= in each subclass, because the inherited attribute is ignored by the interpreter.
+- Instances will only be able to have the attributes listed in =__slots__=, unless you include ='__dict__'= in =__slots__= (but doing so may negate the memory savings).
+- Instances cannot be targets of weak references unless you remember to include ='__weakref__'= in =__slots__=.
+
+If your program is not handling millions of instances, it's probably not worth the trouble of creating a somewhat unusual and tricky class whose instances may not accept dynamic attributes or may not support weak references. Like any optimization, =__slots__= should be used only if justified by a present need and when its benefit is proven by careful profiling.
+
+The last topic in this chapter has to do with overriding a class attribute in instances and subclasses.
+
+** Overriding Class Attributes
+
+
+A distinctive feature of Python is how class attributes can be used as default values for instance attributes. In =Vector2d= there is the =typecode= class attribute. It's used twice in the =__bytes__= method, but we read it as =self.typecode= by design. Because =Vector2d= instances are created without a =typecode= attribute of their own, =self.typecode= will get the =Vector2d.typecode= class attribute by default.
+
+But if you write to an instance attribute that does not exist, you create a new instance attribute---e.g., a =typecode= instance attribute---and the class attribute by the same name is untouched. However, from then on, whenever the code handling that instance reads =self.typecode=, the instance =typecode= will be retrieved, effectively shadowing the class attribute by the same name. This opens the possibility of customizing an individual instance with a different =typecode=.
+
+The default =Vector2d.typecode= is ='d'=, meaning each vector component will be represented as an 8-byte double precision float when exporting to =bytes=. If we set the =typecode= of a =Vector2d= instance to ='f'= prior to exporting, each component will be exported as a 4-byte single precision float. [[file:ch09.html#typecode_instance_demo][Example 9-13]] demonstrates.
+
+*** Warning
+    :PROPERTIES:
+    :CUSTOM_ID: warning-4
+    :CLASS: title
+    :END:
+
+We are discussing adding a custom instance attribute, therefore [[file:ch09.html#typecode_instance_demo][Example 9-13]] uses the =Vector2d= implementation without =__slots__= as listed in [[file:ch09.html#ex_vector2d_v3_full][Example 9-9]].
+
+
+
+Example 9-13. Customizing an instance by setting the typecode attribute that was formerly inherited from the class
+
+#+BEGIN_EXAMPLE
+    >>> from vector2d_v3 import Vector2d
+    >>> v1 = Vector2d(1.1, 2.2)
+    >>> dumpd = bytes(v1)
+    >>> dumpd
+    b'dx9ax99x99x99x99x99xf1?x9ax99x99x99x99x99x01@'
+    >>> len(dumpd)  # 
+    17
+    >>> v1.typecode = 'f'  # 
+    >>> dumpf = bytes(v1)
+    >>> dumpf
+    b'fxcdxccx8c?xcdxccx0c@'
+    >>> len(dumpf)  # 
+    9
+    >>> Vector2d.typecode  # 
+    'd'
+#+END_EXAMPLE
+
+- [[#CO107-1][[[file:callouts/1.png]]]]  :: Default =bytes= representation is 17 bytes long.
+
+- [[#CO107-2][[[file:callouts/2.png]]]]  :: Set =typecode= to ='f'= in the =v1= instance.
+
+- [[#CO107-3][[[file:callouts/3.png]]]]  :: Now the =bytes= dump is 9 bytes long.
+
+- [[#CO107-4][[[file:callouts/4.png]]]]  :: =Vector2d.typecode= is unchanged; only the =v1= instance uses =typecode= ='f'=.
+
+Now it should be clear why the =bytes= export of a =Vector2d= is prefixed by the =typecode=: we wanted to support different export formats.
+
+If you want to change a class attribute you must set it on the class directly, not through an instance. You could change the default =typecode= for all instances (that don't have their own =typecode=) by doing this:
+
+#+BEGIN_EXAMPLE
+    >>> Vector2d.typecode = 'f'
+#+END_EXAMPLE
+
+However, there is an idiomatic Python way of achieving a more permanent effect, and being more explicit about the change. Because class attributes are public, they are inherited by subclasses, so it's common practice to subclass just to customize a class data attribute. The Django class-based views use this technique extensively. [[file:ch09.html#typecode_subclass_demo][Example 9-14]] shows how.
+
+
+
+Example 9-14. The ShortVector2d is a subclass of Vector2d, which only overwrites the default typecode
+
+#+BEGIN_EXAMPLE
+    >>> from vector2d_v3 import Vector2d
+    >>> class ShortVector2d(Vector2d):  # 
+    ...     typecode = 'f'
+    ...
+    >>> sv = ShortVector2d(1/11, 1/27)  # 
+    >>> sv
+    ShortVector2d(0.09090909090909091, 0.037037037037037035)  # 
+    >>> len(bytes(sv))  # 
+    9
+#+END_EXAMPLE
+
+- [[#CO108-1][[[file:callouts/1.png]]]]  :: Create =ShortVector2d= as a =Vector2d= subclass just to overwrite the =typecode= class attribute.
+
+- [[#CO108-2][[[file:callouts/2.png]]]]  :: Build =ShortVector2d= instance =sv= for demonstration.
+
+- [[#CO108-3][[[file:callouts/3.png]]]]  :: Inspect the =repr= of =sv=.
+
+- [[#CO108-4][[[file:callouts/4.png]]]]  :: Check that the length of the exported bytes is 9, not 17 as before.
+
+This example also explains why I did not hardcode the =class_name= in =Vecto2d.__repr__=, but instead got it from =type(self).__name__=, like this:
+
+#+BEGIN_EXAMPLE
+        # inside class Vector2d:
+
+        def __repr__(self):
+            class_name = type(self).__name__
+            return '{}({!r}, {!r})'.format(class_name, *self)
+#+END_EXAMPLE
+
+If I had hardcoded the =class_name=, subclasses of =Vector2d= like =ShortVector2d= would have to overwrite =__repr__= just to change the =class_name=. By reading the name from the =type= of the instance, I made =__repr__= safer to inherit.
+
+This ends our coverage of implementing a simple class that leverages the data model to play well with the rest of Python---offering different object representations, implementing a custom formatting code, exposing read-only attributes, and supporting =hash()= to integrate with sets and mappings.
+
+** Chapter Summary
+
+
+The aim of this chapter was to demonstrate the use of special methods and conventions in the construction of a well-behaved Pythonic class.
+
+Is /vector2d_v3.py/ ([[file:ch09.html#ex_vector2d_v3_full][Example 9-9]]) more Pythonic than /vector2d_v0.py/ ([[file:ch09.html#ex_vector2d_v0][Example 9-2]])? The =Vector2d= class in /vector2d_v3.py/ certainly exhibits more Python features. But whether the first or the last =Vector2d= implementation is more idiomatic depends on the context where it would be used. Tim Peter's Zen of Python says:
+
+#+BEGIN_QUOTE
+  Simple is better than complex.
+#+END_QUOTE
+
+A Pythonic object should be as simple as the requirements allow---and not a parade of language features.
+
+But my goal in expanding the =Vector2d= code was to provide context for discussing Python special methods and coding conventions. If you look back at [[file:ch01.html#special_names_tbl][Table 1-1]], the several listings in this chapter demonstrated:
+
+- All string/bytes representation methods: =__repr__=, =__str__=, =__format__=, and =__bytes__=.
+- Several methods for converting an object to a number: =__abs__=, =__bool__=, =__hash__=.
+- The =__eq__= operator, to test =bytes= conversion and to enable hashing (along with =__hash__=).
+
+While supporting conversion to =bytes= we also implemented an alternative constructor, =Vector2d.frombytes()=, which provided the context for discussing the decorators =@classmethod= (very handy) and =@staticmethod= (not so useful, module-level functions are simpler). The =frombytes= method was inspired by it's namesake in the =array.array= class.
+
+We saw that the [[https://docs.python.org/3/library/string.html#formatspec][Format Specification Mini-Language]] is extensible by implementing a =__format__= method that does some minimal parsing of =format_spec= provided to the =format(obj, format_spec)= built-in or within replacement fields ='{:«format_spec»}'= in strings used with the =str.format= method.
+
+In preparation to make =Vector2d= instances hashable, we made an effort to make them immutable, at least preventing accidental changes by coding the =x= and =y= attributes as private, and exposing them as read-only properties. We then implemented =__hash__= using the recommended technique of xor-ing the hashes of the instance attributes.
+
+We then discussed the memory savings and the caveats of declaring a =__slots__= attribute in =Vector2d=. Because using =__slots__= is somewhat tricky, it really makes sense only when handling a very large number of instances---think millions of instances, not just thousands.
+
+The last topic we covered was the overriding of a class attribute accessed via the instances (e.g., =self.typecode=). We did that first by creating an instance attribute, and then by subclassing and overwriting at the class level.
+
+Throughout the chapter, I mentioned how design choices in the examples were informed by studying the API of standard Python objects. If this chapter can be summarized in one sentence, this is it:
+
+#+BEGIN_QUOTE
+  To build Pythonic objects, observe how real Python objects behave.
+
+  --- Ancient Chinese proverb
+
+#+END_QUOTE
+
+** Further Reading
+
+
+This chapter covered several special methods of the data model, so naturally the primary references are the same as the ones provided in [[file:ch01.html][Chapter 1]], which gave a high-level view of the same topic. For convenience, I'll repeat those four earlier recommendations here, and add a few other ones:
+
+-  [[http://bit.ly/1GsZwss][“Data Model” chapter]] of The Python Language Reference  :: Most of the methods we used in this chapter are documented in [[http://bit.ly/1Vma6b2][“3.3.1. Basic customization”]].
+-  /[[http://shop.oreilly.com/product/9780596100469.do][Python in a Nutshell, 2nd Edition]]/, by Alex Martelli  :: Excellent coverage of the data model, even if only Python 2.5 is covered (in the second edition). The fundamental concepts are all the same and most of the Data Model APIs haven't changed at all since Python 2.2, when built-in types and user-defined classes became more compatible.
+-  /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, 3rd Edition]]/, by David Beazley and Brian K. Jones  :: Very modern coding practices demonstrated through recipes. Chapter 8, “Classes and Objects” in particular has several solutions related to discussions in this chapter.
+-  /Python Essential Reference, 4th Edition/, by David Beazley  :: Covers the data model in detail in the context of Python 2.6 and Python 3.
+
+In this chapter, we covered every special method related to object representation, except =__index__=. It's used to coerce an object to an integer index in the specific context of sequence slicing, and was created to solve a need in NumPy. In practice, you and I are not likely to need to implement =__index__= unless we decide to write a new numeric data type, and we want it to be usable as arguments to =__getitem__=. If you are curious about it, A.M. Kuchling's [[https://docs.python.org/2.5/whatsnew/pep-357.html][What's New in Python 2.5]] has a short explanation, and [[https://www.python.org/dev/peps/pep-0357/][PEP 357 --- Allowing Any Object to be Used for Slicing]] details the need for =__index__=, from the perspective of an implementor of a C-extension, Travis Oliphant, the lead author of NumPy.
+
+An early realization of the need for distinct string representations for objects appeared in Smalltalk. The 1996 article [[http://bit.ly/1IIKX6t][“How to Display an Object as a String: printString and displayString”]] by Bobby Woolf discusses the implementation of the =printString= and =displayString= methods in that language. From that article, I borrowed the pithy descriptions “the way the developer wants to see it” and “the way the user wants to see it” when defining =repr()= and =str()= in [[file:ch09.html#object_repr_sec][Object Representations]].
+
+
+
+Soapbox
+
+*Properties Help Reduce Upfront Costs*
+
+In the initial versions of =Vector2d=, the =x= and =y= attributes were public, as are all Python instance and class attributes by default. Naturally, users of vectors need to be able to access its components. Although our vectors are iterable and can be unpacked into a pair of variables, it's also desirable to be able to write =my_vector.x= and =my_vector.y= to get each component.
+
+When we felt the need to avoid accidental updates to the =x= and =y= attributes, we implemented properties, but nothing changed elsewhere in the code and in the public interface of =Vector2d=, as verified by the doctests. We are still able to access =my_vector.x= and =my_vector.y=.
+
+This shows that we can always start our classes in the simplest possible way, with public attributes, because when (or if) we later need to impose more control with getters and setters, these can be implemented through properties without changing any of the code that already interacts with our objects through the names (e.g., =x= and =y=) that were initially simple public attributes.
+
+This approach is the opposite of that encouraged by the Java language: a Java programmer cannot start with simple public attributes and only later, if needed, implement properties, because they don't exist in the language. Therefore, writing getters and setters is the norm in Java---even when those methods do nothing useful---because the API cannot evolve from simple public attributes to getters and setters without breaking all code that uses those attributes.
+
+In addition, as our technical reviewer Alex Martelli points out, typing getter/setter calls everywhere is goofy. You have to write stuff like:
+
+#+BEGIN_EXAMPLE
+    ---
+    >>> my_object.set_foo(my_object.get_foo() + 1)
+    ---
+#+END_EXAMPLE
+
+Just to do this:
+
+#+BEGIN_EXAMPLE
+    ---
+    >>> my_object.foo += 1
+    ---
+#+END_EXAMPLE
+
+Ward Cunningham, inventor of the wiki and an Extreme Programming pioneer, recommends asking “What's the simplest thing that could possibly work?” The idea is to focus on the goal.^{[[[#ftn.id923698][59]]]} Implementing setters and getters up front is a distraction from the goal. In Python, we can simply use public attributes knowing we can change them to properties later, if the need arises.
+
+*Safety Versus Security in Private Attributes*
+
+#+BEGIN_QUOTE
+  Perl doesn't have an infatuation with enforced privacy. It would prefer that you stayed out of its living room because you weren't invited, not because it has a shotgun.
+
+  --- Larry Wall /Creator of Perl/
+
+#+END_QUOTE
+
+Python and Perl are polar opposites in many regards, but Larry and Guido seem to agree on object privacy.
+
+Having taught Python to many Java programmers over the years, I've found a lot of them put too much faith in the privacy guarantees that Java offers. As it turns out, the Java =private= and =protected= modifiers normally provide protection against accidents only (i.e., safety). They can only guarantee security against malicious intent if the application is deployed with a security manager, and that seldom happens in practice, even in corporate settings.
+
+To prove my point, I like to show this Java class ([[file:ch09.html#ex_java_confidential_class][Example 9-15]]).
+
+
+
+Example 9-15. Confidential.java: a Java class with a private field named secret
+
+#+BEGIN_EXAMPLE
+    public class Confidential {
+
+        private String secret = "";
+
+        public Confidential(String text) {
+            secret = text.toUpperCase();
+        }
+    }
+#+END_EXAMPLE
+
+In [[file:ch09.html#ex_java_confidential_class][Example 9-15]], I store the =text= in the =secret= field after converting it to uppercase, just to make it obvious that whatever is in that field will be in all caps.
+
+The actual demonstration consists of running /expose.py/ with Jython. That script uses introspection (“reflection” in Java parlance) to get the value of a private field. The code is in [[file:ch09.html#ex_expose_py][Example 9-16]].
+
+
+
+Example 9-16. expose.py: Jython code to read the content of a private field in another class
+
+#+BEGIN_EXAMPLE
+    import Confidential
+
+    message = Confidential('top secret text')
+    secret_field = Confidential.getDeclaredField('secret')
+    secret_field.setAccessible(True)  # break the lock!
+    print 'message.secret =', secret_field.get(message)
+#+END_EXAMPLE
+
+If you run [[file:ch09.html#ex_expose_py][Example 9-16]], this is what you get:
+
+#+BEGIN_EXAMPLE
+    $ jython expose.py
+    message.secret = TOP SECRET TEXT
+#+END_EXAMPLE
+
+The string ='TOP SECRET TEXT'= was read from the =secret= private field of the =Confidential= class.
+
+There is no black magic here: /expose.py/ uses the Java reflection API to get a reference to the private field named ='secret'=, and then calls ='secret_field.setAccessible(True)'= to make it readable. The same thing can be done with Java code, of course (but it takes more than three times as many lines to do it; see the file /Expose.java/ in the [[https://github.com/fluentpython/example-code][/Fluent Python/ code repository]]).
+
+The crucial call =.setAccessible(True)= will fail only if the Jython script or the Java main program (e.g., =Expose.class=) is running under the supervision of a [[http://bit.ly/1IIMdqd][SecurityManager]]. But in the real world, Java applications are rarely deployed with a SecurityManager---except for Java applets (remember those?).
+
+My point is: in Java too, access control modifiers are mostly about safety and not security, at least in practice. So relax and enjoy the power Python gives you. Use it responsibly.
+
+
+
+--------------
+
+
+^{[[[#id626734][49]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id713703][50]]]} I used =eval= to clone the object here just to make a point about =repr=; to clone an instance, the =copy.copy= function is safer and faster.
+
+
+^{[[[#id800684][51]]]} This line could also be written as =yield self.x; yield.self.y=. I have a lot more to say about the =__iter__= special method, generator expressions, and the =yield= keyword in [[file:ch14.html][Chapter 14]].
+
+
+^{[[[#id1006766][52]]]} We had a brief introduction to =memoryview=, explaining its =.cast= method in [[file:ch02.html#memoryview_sec][Memory Views]].
+
+
+^{[[[#id685029][53]]]} Leonardo Rochael, one of the technical reviewers of this book disagrees with my low opinion of =staticmethod=, and recommends the blog post [[http://bit.ly/1FSFTW6][“The Definitive Guide on How to Use Static, Class or Abstract Methods in Python”]] by Julien Danjou as a counter-argument. Danjou's post is very good; I do recommend it. But it wasn't enough to change my mind about =staticmethod=. You'll have to decide for yourself.
+
+
+^{[[[#id911094][54]]]} This is not how Ian Bicking would do it; recall the quote at the start of the chapter. The pros and cons of private attributes are the subject of the upcoming [[file:ch09.html#private_protected_sec][Private and “Protected” Attributes in Python]].
+
+
+^{[[[#id877038][55]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id493754][56]]]} In modules, a single =_= in front of a top-level name does have an effect: if you write =from mymod import *= the names with a =_= prefix are not imported from =mymod=. However, you can still write =from mymod import _privatefunc=. This is explained in the [[http://bit.ly/1Gt95rp][Python Tutorial, section 6.1. More on Modules]].
+
+
+^{[[[#id514392][57]]]} One example is in the [[http://bit.ly/1Gt9cDg][gettext module docs]].
+
+
+^{[[[#id898908][58]]]} If this state of affairs depresses you, and makes you wish Python was more like Java in this regard, don't read my discussion of the relative strength of the Java =private= modifier in [[file:ch09.html#pythonic_soapbox][Soapbox]].
+
+
+^{[[[#id923698][59]]]} See [[http://www.artima.com/intv/simplest3.html][“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+
+one of the technical reviewers of this book disagrees with my low opinion of =staticmethod=, and recommends the blog post [[http://bit.ly/1FSFTW6][“The Definitive Guide on How to Use Static, Class or Abstract Methods in Python”]] by Julien Danjou as a counter-argument. Danjou's post is very good; I do recommend it. But it wasn't enough to change my mind about =staticmethod=. You'll have to decide for yourself.
+
+
+^{[[[#id911094][54]]]} This is not how Ian Bicking would do it; recall the quote at the start of the chapter. The pros and cons of private attributes are the subject of the upcoming [[file:ch09.html#private_protected_sec][Private and “Protected” Attributes in Python]].
+
+
+^{[[[#id877038][55]]]} From the [[http://pythonpaste.org/StyleGuide.html][Paste Style Guide]].
+
+
+^{[[[#id493754][56]]]} In modules, a single =_= in front of a top-level name does have an effect: if you write =from mymod import *= the names with a =_= prefix are not imported from =mymod=. However, you can still write =from mymod import _privatefunc=. This is explained in the [[http://bit.ly/1Gt95rp][Python Tutorial, section 6.1. More on Modules]].
+
+
+^{[[[#id514392][57]]]} One example is in the [[http://bit.ly/1Gt9cDg][gettext module docs]].
+
+
+^{[[[#id898908][58]]]} If this state of affairs depresses you, and makes you wish Python was more like Java in this regard, don't read my discussion of the relative strength of the Java =private= modifier in [[file:ch09.html#pythonic_soapbox][Soapbox]].
+
+
+^{[[[#id923698][59]]]} See [[http://www.artima.com/intv/simplest3.html][“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+
+“Simplest Thing that Could Possibly Work: A Conversation with Ward Cunningham, Part V”]].
+
+

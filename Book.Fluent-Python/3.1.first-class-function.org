@@ -1,0 +1,1024 @@
+* Chapter 5. First-Class Functions
+
+#+BEGIN_QUOTE
+  I have never considered Python to be heavily influenced by functional languages, no matter what people say or think. I was much more familiar with imperative languages such as C and Algol 68 and although I had made functions first-class objects, I didn't view Python as a functional programming language.^{[[[#ftn.id488628][31]]]}
+
+  --- Guido van Rossum /Python BDFL/
+
+#+END_QUOTE
+
+Functions in Python are first-class objects. Programming language theorists define a “first-class object” as a program entity that can be:
+
+- Created at runtime
+- Assigned to a variable or element in a data structure
+- Passed as an argument to a function
+- Returned as the result of a function
+
+Integers, strings, and dictionaries are other examples of first-class objects in Python---nothing fancy here. But if you came to Python from a language where functions are not first-class citizens, this chapter and the rest of Part III of the book focuses on the implications and practical applications of treating functions as objects.
+
+** Tip
+
+
+The =functools= module brings together a handful of higher-order functions. The best known of them is probably =reduce=, which was covered in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]]. Of the remaining functions in =functools=, the most useful is =partial= and its variation, =partialmethod=.
+
+=functools.partial= is a higher-order function that allows partial application of a function. Given a function, a partial application produces a new callable with some of the arguments of the original function fixed. This is useful to adapt a function that takes one or more arguments to an API that requires a callback with fewer arguments. [[file:ch05.html#ex_partial_mul][Example 5-26]] is a trivial demonstration.
+
+
+
+Example 5-26. Using partial to use a two-argument function where a one-argument callable is required
+
+#+BEGIN_EXAMPLE
+    >>> from operator import mul
+    >>> from functools import partial
+    >>> triple = partial(mul, 3)  
+    >>> triple(7)  
+    21
+    >>> list(map(triple, range(1, 10)))  
+    [3, 6, 9, 12, 15, 18, 21, 24, 27]
+#+END_EXAMPLE
+
+- [[#CO59-1][[[file:callouts/1.png]]]]  :: Create new =triple= function from =mul=, binding first positional argument to =3=.
+
+- [[#CO59-2][[[file:callouts/2.png]]]]  :: Test it.
+
+- [[#CO59-3][[[file:callouts/3.png]]]]  :: Use =triple= with =map=; =mul= would not work with =map= in this example.
+
+A more useful example involves the =unicode.normalize= function that we saw in [[file:ch04.html#normalizing_unicode][Normalizing Unicode for Saner Comparisons]]. If you work with text from many languages, you may want to apply =unicode.normalize('NFC', s)= to any string =s= before comparing or storing it. If you do that often, it's handy to have an =nfc= function to do so, as in [[file:ch05.html#ex_partial_nfc][Example 5-27]].
+
+
+
+Example 5-27. Building a convenient Unicode normalizing function with partial
+
+#+BEGIN_EXAMPLE
+    >>> import unicodedata, functools
+    >>> nfc = functools.partial(unicodedata.normalize, 'NFC')
+    >>> s1 = 'café'
+    >>> s2 = 'cafeu0301'
+    >>> s1, s2
+    ('café', 'café')
+    >>> s1 == s2
+    False
+    >>> nfc(s1) == nfc(s2)
+    True
+#+END_EXAMPLE
+
+=partial= takes a callable as first argument, followed by an arbitrary number of positional and keyword arguments to bind.
+
+[[file:ch05.html#partial_demo][Example 5-28]] shows the use of =partial= with the =tag= function from [[file:ch05.html#tagger_ex][Example 5-10]], to freeze one positional argument and one keyword argument.
+
+
+
+Example 5-28. Demo of partial applied to the function tag from [[file:ch05.html#tagger_ex][Example 5-10]]
+
+#+BEGIN_EXAMPLE
+    >>> from tagger import tag
+    >>> tag
+    <function tag at 0x10206d1e0>  
+    >>> from functools import partial
+    >>> picture = partial(tag, 'img', cls='pic-frame')  
+    >>> picture(src='wumpus.jpeg')
+    '<img class="pic-frame" src="wumpus.jpeg" />'  
+    >>> picture
+    functools.partial(<function tag at 0x10206d1e0>, 'img', cls='pic-frame')  
+    >>> picture.func  
+    <function tag at 0x10206d1e0>
+    >>> picture.args
+    ('img',)
+    >>> picture.keywords
+    {'cls': 'pic-frame'}
+#+END_EXAMPLE
+
+- [[#CO60-1][[[file:callouts/1.png]]]]  :: Import =tag= from [[file:ch05.html#tagger_ex][Example 5-10]] and show its ID.
+
+- [[#CO60-2][[[file:callouts/2.png]]]]  :: Create =picture= function from =tag= by fixing the first positional argument with ='img'= and the =cls= keyword argument with ='pic-frame'=.
+
+- [[#CO60-3][[[file:callouts/3.png]]]]  :: =picture= works as expected.
+
+- [[#CO60-4][[[file:callouts/4.png]]]]  :: =partial()= returns a =functools.partial= object.^{[[[#ftn.id1045303][32]]]}
+
+- [[#CO60-5][[[file:callouts/5.png]]]]  :: A =functools.partial= object has attributes providing access to the original function and the fixed arguments.
+
+The =functools.partialmethod= function (new in Python 3.4) does the same job as =partial=, but is designed to work with methods.
+
+An impressive =functools= function is =lru_cache=, which does memoization---a form of automatic optimization that works by storing the results of function calls to avoid expensive recalculations. We will cover it in [[file:ch07.html][Chapter 7]], where decorators are explained, along with other higher-order functions designed to be used as decorators: =singledispatch= and =wraps=.
+
+** Chapter Summary
+
+
+The goal of this chapter was to explore the first-class nature of functions in Python. The main ideas are that you can assign functions to variables, pass them to other functions, store them in data structures, and access function attributes, allowing frameworks and tools to act on that information. Higher-order functions, a staple of functional programming, are common in Python---even if the use of =map=, =filter=, and =reduce= is not as frequent as it was---thanks to list comprehensions (and similar constructs like generator expressions) and the appearance of reducing built-ins like =sum=, =all=, and =any=. The =sorted=, =min=, =max= built-ins, and =functools.partial= are examples of commonly used higher-order functions in the language.
+
+Callables come in seven different flavors in Python, from the simple functions created with =lambda= to instances of classes implementing =__call__=. They can all be detected by the =callable()= built-in. Every callable supports the same rich syntax for declaring formal parameters, including keyword-only parameters and annotations---both new features introduced with Python 3.
+
+Python functions and their annotations have a rich set of attributes that can be read with the help of the =inspect= module, which includes the =Signature.bind= method to apply the flexible rules that Python uses to bind actual arguments to declared parameters.
+
+Lastly, we covered some functions from the =operator= module and =functools.partial=, which facilitate functional programming by minimizing the need for the functionally challenged =lambda= syntax.
+
+** Further Reading
+
+
+The next two chapters continue our exploration of programming with function objects. [[file:ch06.html][Chapter 6]] shows how first-class functions can simplify some classic object-oriented design patterns, while [[file:ch07.html][Chapter 7]] dives into function decorators---a special kind of higher-order function---and the closure mechanism that makes them work.
+
+Chapter 7 of the /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, Third Edition]]/ (O'Reilly), by David Beazley and Brian K. Jones, is an excellent complement to the current chapter as well as [[file:ch07.html][Chapter 7]] of this book, covering mostly the same concepts with a different approach.
+
+In /The Python Language Reference/, [[http://bit.ly/1Vm8dv2][“3.2. The standard type hierarchy”]] presents the seven callable types, along with all the other built-in types.
+
+The Python-3-only features discussed in this chapter have their own PEPs: [[https://www.python.org/dev/peps/pep-3102/][PEP 3102 --- Keyword-Only Arguments]] and [[https://www.python.org/dev/peps/pep-3107/][PEP 3107 --- Function Annotations]].
+
+For more about the current (as of mid-2014) use of annotations, two Stack Overflow questions are worth reading: [[http://bit.ly/1FHiOXf][“What are good uses for Python3's ‘Function Annotations'”]] has a practical answer and insightful comments by Raymond Hettinger, and the answer for [[http://bit.ly/1FHiN5F][“What good are Python function annotations?”]] quotes extensively from Guido van Rossum.
+
+[[https://www.python.org/dev/peps/pep-0362/][PEP 362 --- Function Signature Object]] is worth reading if you intend to use the =inspect= module that implements that feature.
+
+A great introduction to functional programming in Python is A. M. Kuchling's [[http://docs.python.org/3/howto/functional.html][Python Functional Programming HOWTO]]. The main focus of that text, however, is on the use of iterators and generators, which are the subject of [[file:ch14.html][Chapter 14]].
+
+[[https://github.com/kachayev/fn.py][=fn.py=]] is a package to support functional programming in Python 2 and 3. According to its author, Alexey Kachayev, =fn.py= provides “implementation of missing features to enjoy FP” in Python. It includes a =@recur.tco= decorator that implements tail-call optimization for unlimited recursion in Python, among many other functions, data structures, and recipes.
+
+The StackOverflow question [[http://bit.ly/1FHiTdh][“Python: Why is functools.partial necessary?”]] has a highly informative (and funny) reply by Alex Martelli, author of the classic /Python in a Nutshell/.
+
+Jim Fulton's Bobo was probably the first web framework that deserved to be called object-oriented. If you were intrigued by it and want to learn more about its modern rewrite, start at its [[http://bobo.readthedocs.org/en/latest/][Introduction]]. A little of the early history of Bobo appears in a comment by Phillip J. Eby in a [[http://bit.ly/1FHiUxR][discussion at Joel Spolsky's blog]].
+
+
+
+Soapbox
+
+*About Bobo*
+
+I owe my Python career to Bobo. I used it in my first Python web project in 1998. I discovered Bobo while looking for an object-oriented way to code web applications, after trying Perl and Java alternatives.
+
+In 1997, Bobo had pioneered the object publishing concept: direct mapping from URLs to a hierarchy of objects, with no need to configure routes. I was hooked when I saw the beauty of this. Bobo also featured automatic HTTP query handling based on analysis of the signatures of the methods or functions used to handle requests.
+
+Bobo was created by Jim Fulton, known as “The Zope Pope” thanks to his leading role in the development of the Zope framework, the foundation of the Plone CMS, SchoolTool, ERP5, and other large-scale Python projects. Jim is also the creator of ZODB---the Zope Object Database---a transactional object database that provides ACID (atomicity, consistency, isolation, and durability), designed for ease of use from Python.
+
+Jim has since rewritten Bobo from scratch to support WSGI and modern Python (including Python 3). As of this writing, Bobo uses the =six= library to do the function introspection, in order to be compatible with Python 2 and Python 3 in spite of the changes in function objects and related APIs.
+
+*Is Python a Functional Language?*
+
+Around the year 2000, I was at a training in the United States when Guido van Rossum dropped by the classroom (he was not the instructor). In the Q&A that followed, somebody asked him which features of Python were borrowed from other languages. His answer: “Everything that is good in Python was stolen from other languages.”
+
+Shriram Krishnamurthi, professor of Computer Science at Brown University, starts his [[http://bit.ly/1FHj4p2][“Teaching Programming Languages in a Post-Linnaean Age” paper]] with this:
+
+#+BEGIN_QUOTE
+  Programming language “paradigms” are a moribund and tedious legacy of a bygone age. Modern language designers pay them no respect, so why do our courses slavishly adhere to them?
+#+END_QUOTE
+
+In that paper, Python is mentioned by name in this passage:
+
+#+BEGIN_QUOTE
+  What else to make of a language like Python, Ruby, or Perl? Their designers have no patience for the niceties of these Linnaean hierarchies; they borrow features as they wish, creating melanges that utterly defy characterization.
+#+END_QUOTE
+
+Krishnamurthi submits that instead of trying to classify languages in some taxonomy, it's more useful to consider them as aggregations of features.
+
+Even if it was not Guido's goal, endowing Python with first-class functions opened the door to functional programming. In his post [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], he says that =map=, =filter=, and =reduce= were the motivation for adding =lambda= to Python in the first place. All of these features were contributed together by Amrit Prem for Python 1.0 in 1994 (according to [[http://hg.python.org/cpython/file/default/Misc/HISTORY][Misc/HISTORY]] in the CPython source code).
+
+=lambda=, =map=, =filter=, and =reduce= first appeared in Lisp, the original functional language. However, Lisp does not limit what can be done inside a =lambda=, because everything in Lisp is an expression. Python uses a statement-oriented syntax in which expressions cannot contain statements, and many language constructs are statements---including =try/catch=, which is what I miss most often when writing =lambdas=. This is the price to pay for Python's highly readable syntax.^{[[[#ftn.id649852][33]]]} Lisp has many strengths, but readability is not one of them.
+
+Ironically, stealing the list comprehension syntax from another functional language---Haskell---significantly diminished the need for =map= and =filter=, and also for =lambda=.
+
+Besides the limited anonymous function syntax, the biggest obstacle to wider adoption of functional programming idioms in Python is the lack of tail-recursion elimination, an optimization that allows memory-efficient computation of a function that makes a recursive call at the “tail” of its body. In another blog post, [[http://bit.ly/1FHjdZv][“Tail Recursion Elimination”]], Guido gives several reasons why such optimization is not a good fit for Python. That post is a great read for the technical arguments, but even more so because the first three and most important reasons given are usability issues. It is no accident that Python is a pleasure to use, learn, and teach. Guido made it so.
+
+So there you have it: Python is, by design, not a functional language---whatever that means. Python just borrows a few good ideas from functional languages.
+
+*The Problem with Anonymous Functions*
+
+Beyond the Python-specific syntax constraints, anonymous functions have a serious drawback in every language: they have no name.
+
+I am only half joking here. Stack traces are easier to read when functions have names. Anonymous functions are a handy shortcut, people have fun coding with them, but sometimes they get carried away---especially if the language and environment encourage deep nesting of anonymous functions, like JavaScript on Node.js. Lots of nested anonymous functions make debugging and error handling hard. Asynchronous programming in Python is more structured, perhaps because the limited =lambda= demands it. I promise to write more about asynchronous programming in the future, but this subject must be deferred to [[file:ch18.html][Chapter 18]]. By the way, promises, futures, and deferreds are concepts used in modern asynchronous APIs. Along with coroutines, they provide an escape from the so-called “callback hell.” We'll see how callback-free asynchronous programming works in [[file:ch18.html#callbacks2coros][From Callbacks to Futures and Coroutines]].
+
+
+
+--------------
+
+
+^{[[[#id488628][31]]]} [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], from Guido's The History of Python blog.
+
+
+^{[[[#id1045303][32]]]} The [[http://bit.ly/1Vm8cqQ][source code]] for =functools.py= reveals that the =functools.partial= class is implemented in C and is used by default. If that is not available, a pure-Python implementation of =partial= is available since Python 3.4.in the =functools= module.
+
+
+^{[[[#id649852][33]]]} There also the problem of lost indentation when pasting code to Web forums, but I digress.
+
+
+dent that Python is a pleasure to use, learn, and teach. Guido made it so.
+
+So there you have it: Python is, by design, not a functional language---whatever that means. Python just borrows a few good ideas from functional languages.
+
+*The Problem with Anonymous Functions*
+
+Beyond the Python-specific syntax constraints, anonymous functions have a serious drawback in every language: they have no name.
+
+I am only half joking here. Stack traces are easier to read when functions have names. Anonymous functions are a handy shortcut, people have fun coding with them, but sometimes they get carried away---especially if the language and environment encourage deep nesting of anonymous functions, like JavaScript on Node.js. Lots of nested anonymous functions make debugging and error handling hard. Asynchronous programming in Python is more structured, perhaps because the limited =lambda= demands it. I promise to write more about asynchronous programming in the future, but this subject must be deferred to [[file:ch18.html][Chapter 18]]. By the way, promises, futures, and deferreds are concepts used in modern asynchronous APIs. Along with coroutines, they provide an escape from the so-called “callback hell.” We'll see how callback-free asynchronous programming works in [[file:ch18.html#callbacks2coros][From Callbacks to Futures and Coroutines]].
+
+
+
+--------------
+
+
+^{[[[#id488628][31]]]} [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], from Guido's The History of Python blog.
+
+
+^{[[[#id1045303][32]]]} The [[http://bit.ly/1Vm8cqQ][source code]] for =functools.py= reveals that the =functools.partial= class is implemented in C and is used by default. If that is not available, a pure-Python implementation of =partial= is available since Python 3.4.in the =functools= module.
+
+
+^{[[[#id649852][33]]]} There also the problem of lost indentation when pasting code to Web forums, but I digress.
+
+
+ when pasting code to Web forums, but I digress.
+
+
+'__get__', '__globals__', '__kwdefaults__', '__name__', '__qualname__']
+    >>>
+#+END_EXAMPLE
+
+- [[#CO54-1][[[file:callouts/1.png]]]]  :: Create bare user-defined class.
+
+- [[#CO54-2][[[file:callouts/2.png]]]]  :: Make an instance of it.
+
+- [[#CO54-3][[[file:callouts/3.png]]]]  :: Create a bare function.
+
+- [[#CO54-4][[[file:callouts/4.png]]]]  :: Using set difference, generate a sorted list of the attributes that exist in a function but not in an instance of a bare class.
+
+[[file:ch05.html#function-attrs-table][Table 5-1]] shows a summary of the attributes listed by [[file:ch05.html#func_attr_list][Example 5-9]].
+
+
+
+Table 5-1. Attributes of user-defined functions
+
+Name
+
+Type
+
+Description
+
+=__annotations__=
+
+=dict=
+
+Parameter and return annotations
+
+=__call__=
+
+=method-wrapper=
+
+Implementation of the () operator; a.k.a. the callable object protocol
+
+=__closure__=
+
+=tuple=
+
+The function closure, i.e., bindings for free variables (often is =None=)
+
+=__code__=
+
+=code=
+
+Function metadata and function body compiled into bytecode
+
+=__defaults__=
+
+=tuple=
+
+Default values for the formal parameters
+
+=__get__=
+
+=method-wrapper=
+
+Implementation of the read-only descriptor protocol (see [[file:ch20.html][Chapter 20]])
+
+=__globals__=
+
+=dict=
+
+Global variables of the module where the function is defined
+
+=__kwdefaults__=
+
+=dict=
+
+Default values for the keyword-only formal parameters
+
+=__name__=
+
+=str=
+
+The function name
+
+=__qualname__=
+
+=str=
+
+The qualified function name, e.g., =Random.choice= (see [[https://www.python.org/dev/peps/pep-3155/][PEP-3155]])
+
+We will discuss the =__defaults__=, =__code__=, and =__annotations__= functions, used by IDEs and frameworks to extract information about function signatures, in later sections. But to fully appreciate these attributes, we will make a detour to explore the powerful syntax Python offers to declare function parameters and to pass arguments into them.
+
+** From Positional to Keyword-Only Parameters
+
+
+One of the best features of Python functions is the extremely flexible parameter handling mechanism, enhanced with keyword-only arguments in Python 3. Closely related are the use of =*= and =**= to “explode” iterables and mappings into separate arguments when we call a function. To see these features in action, see the code for [[file:ch05.html#tagger_ex][Example 5-10]] and tests showing its use in [[file:ch05.html#tagger_demo][Example 5-11]].
+
+
+
+Example 5-10. tag generates HTML; a keyword-only argument cls is used to pass “class” attributes as a workaround because class is a keyword in Python
+
+#+BEGIN_EXAMPLE
+    def tag(name, *content, cls=None, **attrs):
+        """Generate one or more HTML tags"""
+        if cls is not None:
+            attrs['class'] = cls
+        if attrs:
+            attr_str = ''.join(' %s="%s"' % (attr, value)
+                               for attr, value
+                               in sorted(attrs.items()))
+        else:
+            attr_str = ''
+        if content:
+            return 'n'.join('<%s%s>%s</%s>' %
+                             (name, attr_str, c, name) for c in content)
+        else:
+            return '<%s%s />' % (name, attr_str)
+#+END_EXAMPLE
+
+The =tag= function can be invoked in many ways, as [[file:ch05.html#tagger_demo][Example 5-11]] shows.
+
+
+
+Example 5-11. Some of the many ways of calling the tag function from [[file:ch05.html#tagger_ex][Example 5-10]]
+
+#+BEGIN_EXAMPLE
+    >>> tag('br')   
+    '<br />'
+    >>> tag('p', 'hello')   
+    '<p>hello</p>'
+    >>> print(tag('p', 'hello', 'world'))
+    <p>hello</p>
+    <p>world</p>
+    >>> tag('p', 'hello', id=33)   
+    '<p id="33">hello</p>'
+    >>> print(tag('p', 'hello', 'world', cls='sidebar'))   
+    <p class="sidebar">hello</p>
+    <p class="sidebar">world</p>
+    >>> tag(content='testing', name="img")   
+    '<img content="testing" />'
+    >>> my_tag = {'name': 'img', 'title': 'Sunset Boulevard',
+    ...           'src': 'sunset.jpg', 'cls': 'framed'}
+    >>> tag(**my_tag)   
+    '<img class="framed" src="sunset.jpg" title="Sunset Boulevard" />'
+#+END_EXAMPLE
+
+- [[#CO55-1][[[file:callouts/1.png]]]]  :: A single positional argument produces an empty tag with that name.
+
+- [[#CO55-2][[[file:callouts/2.png]]]]  :: Any number of arguments after the first are captured by =*content= as a =tuple=.
+
+- [[#CO55-3][[[file:callouts/3.png]]]]  :: Keyword arguments not explicitly named in the =tag= signature are captured by =**attrs= as a =dict=.
+
+- [[#CO55-4][[[file:callouts/4.png]]]]  :: The =cls= parameter can only be passed as a keyword argument.
+
+- [[#CO55-5][[[file:callouts/5.png]]]]  :: Even the first positional argument can be passed as a keyword when =tag= is called.
+
+- [[#CO55-6][[[file:callouts/6.png]]]]  :: Prefixing the =my_tag= =dict= with =**= passes all its items as separate arguments, which are then bound to the named parameters, with the remaining caught by =**attrs=.
+
+Keyword-only arguments are a new feature in Python 3. In [[file:ch05.html#tagger_ex][Example 5-10]], the =cls= parameter can only be given as a keyword argument---it will never capture unnamed positional arguments. To specify keyword-only arguments when defining a function, name them after the argument prefixed with =*=. If you don't want to support variable positional arguments but still want keyword-only arguments, put a =*= by itself in the signature, like this:
+
+#+BEGIN_EXAMPLE
+    >>> def f(a, *, b):
+    ...     return a, b
+    ...
+    >>> f(1, b=2)
+    (1, 2)
+#+END_EXAMPLE
+
+Note that keyword-only arguments do not need to have a default value: they can be mandatory, like =b= in the preceding example.
+
+We now move on to the introspection of function parameters, starting with a motivating example from a web framework, and on through introspection techniques.
+
+** Retrieving Information About Parameters
+
+
+An interesting application of function introspection can be found in the Bobo HTTP micro-framework. To see that in action, consider a variation of the Bobo tutorial “Hello world” application in [[file:ch05.html#bobo_hello_ex][Example 5-12]].
+
+
+
+Example 5-12. Bobo knows that hello requires a person argument, and retrieves it from the HTTP request
+
+#+BEGIN_EXAMPLE
+    import bobo
+
+    @bobo.query('/')
+    def hello(person):
+        return 'Hello %s!' % person
+#+END_EXAMPLE
+
+The =bobo.query= decorator integrates a plain function such as =hello= with the request handling machinery of the framework. We'll cover decorators in [[file:ch07.html][Chapter 7]]---that's not the point of this example here. The point is that Bobo introspects the =hello= function and finds out it needs one parameter named =person= to work, and it will retrieve a parameter with that name from the request and pass it to =hello=, so the programmer does not need to touch the request object at all.
+
+If you install Bobo and point its development server to the script in [[file:ch05.html#bobo_hello_ex][Example 5-12]] (e.g., =bobo -f hello.py=), a hit on the URL =http://localhost:8080/= will produce the message “Missing form variable person” with a 403 HTTP code. This happens because Bobo understands that the =person= argument is required to call =hello=, but no such name was found in the request. [[file:ch05.html#bobo_hello_error][Example 5-13]] is a shell session using =curl= to show this behavior.
+
+
+
+Example 5-13. Bobo issues a 403 forbidden response if there are missing function arguments in the request; curl -i is used to dump the headers to standard output
+
+#+BEGIN_EXAMPLE
+    $ curl -i http://localhost:8080/
+    HTTP/1.0 403 Forbidden
+    Date: Thu, 21 Aug 2014 21:39:44 GMT
+    Server: WSGIServer/0.2 CPython/3.4.1
+    Content-Type: text/html; charset=UTF-8
+    Content-Length: 103
+
+    <html>
+    <head><title>Missing parameter</title></head>
+    <body>Missing form variable person</body>
+    </html>
+#+END_EXAMPLE
+
+However, if you get =http://localhost:8080/?person=Jim=, the response will be the string ='Hello Jim!'=. See [[file:ch05.html#bobo_hello_ok][Example 5-14]].
+
+
+
+Example 5-14. Passing the person parameter is required for an OK response
+
+#+BEGIN_EXAMPLE
+    $ curl -i http://localhost:8080/?person=Jim
+    HTTP/1.0 200 OK
+    Date: Thu, 21 Aug 2014 21:42:32 GMT
+    Server: WSGIServer/0.2 CPython/3.4.1
+    Content-Type: text/html; charset=UTF-8
+    Content-Length: 10
+
+    Hello Jim!
+#+END_EXAMPLE
+
+How does Bobo know which parameter names are required by the function, and whether they have default values or not?
+
+Within a function object, the =__defaults__= attribute holds a tuple with the default values of positional and keyword arguments. The defaults for keyword-only arguments appear in =__kwdefaults__=. The names of the arguments, however, are found within the =__code__= attribute, which is a reference to a =code= object with many attributes of its own.
+
+To demonstrate the use of these attributes, we will inspect the function =clip= in a module /clip.py/, listed in [[file:ch05.html#ex_clip][Example 5-15]].
+
+
+
+Example 5-15. Function to shorten a string by clipping at a space near the desired length
+
+#+BEGIN_EXAMPLE
+    def clip(text, max_len=80):
+        """Return text clipped at the last space before or after max_len
+        """
+        end = None
+        if len(text) > max_len:
+            space_before = text.rfind(' ', 0, max_len)
+            if space_before >= 0:
+                end = space_before
+            else:
+                space_after = text.rfind(' ', max_len)
+                if space_after >= 0:
+                    end = space_after
+        if end is None:  # no spaces were found
+            end = len(text)
+        return text[:end].rstrip()
+#+END_EXAMPLE
+
+[[file:ch05.html#ex_clip_introspection][Example 5-16]] shows the values of =__defaults__=, =__code__.co_varnames=, and =__code__.co_argcount= for the =clip= function listed in [[file:ch05.html#ex_clip][Example 5-15]].
+
+
+
+Example 5-16. Extracting information about the function arguments
+
+#+BEGIN_EXAMPLE
+    >>> from clip import clip
+    >>> clip.__defaults__
+    (80,)
+    >>> clip.__code__  # doctest: +ELLIPSIS
+    <code object clip at 0x...>
+    >>> clip.__code__.co_varnames
+    ('text', 'max_len', 'end', 'space_before', 'space_after')
+    >>> clip.__code__.co_argcount
+    2
+#+END_EXAMPLE
+
+As you can see, this is not the most convenient arrangement of information. The argument names appear in =__code__.co_varnames=, but that also includes the names of the local variables created in the body of the function. Therefore, the argument names are the first N strings, where N is given by =__code__.co_argcount= which---by the way---does not include any variable arguments prefixed with =*= or =**=. The default values are identified only by their position in the =__defaults__= tuple, so to link each with the respective argument, you have to scan from last to first. In the example, we have two arguments, =text= and =max_len=, and one default, =80=, so it must belong to the last argument, =max_len=. This is awkward.
+
+Fortunately, there is a better way: the =inspect= module.
+
+Take a look at [[file:ch05.html#ex_clip_signature1][Example 5-17]].
+
+
+
+Example 5-17. Extracting the function signature
+
+#+BEGIN_EXAMPLE
+    >>> from clip import clip
+    >>> from inspect import signature
+    >>> sig = signature(clip)
+    >>> sig  # doctest: +ELLIPSIS
+    <inspect.Signature object at 0x...>
+    >>> str(sig)
+    '(text, max_len=80)'
+    >>> for name, param in sig.parameters.items():
+    ...     print(param.kind, ':', name, '=', param.default)
+    ...
+    POSITIONAL_OR_KEYWORD : text = <class 'inspect._empty'>
+    POSITIONAL_OR_KEYWORD : max_len = 80
+#+END_EXAMPLE
+
+This is much better. =inspect.signature= returns an =inspect.Signature= object, which has a =parameters= attribute that lets you read an ordered mapping of names to =inspect.Parameter= objects. Each =Parameter= instance has attributes such as =name=, =default=, and =kind=. The special value =inspect._empty= denotes parameters with no default, which makes sense considering that =None= is a valid---and popular---default value.
+
+The =kind= attribute holds one of five possible values from the =_ParameterKind= class:
+
+-  =POSITIONAL_OR_KEYWORD=  :: A parameter that may be passed as a positional or as a keyword argument (most Python function parameters are of this kind).
+-  =VAR_POSITIONAL=  :: A =tuple= of positional parameters.
+-  =VAR_KEYWORD=  :: A =dict= of keyword parameters.
+-  =KEYWORD_ONLY=  :: A keyword-only parameter (new in Python 3).
+-  =POSITIONAL_ONLY=  :: A positional-only parameter; currently unsupported by Python function declaration syntax, but exemplified by existing functions implemented in C---like =divmod=---that do not accept parameters passed by keyword.
+
+Besides =name=, =default=, and =kind=, =inspect.Parameter= objects have an =annotation= attribute that is usually =inspect._empty= but may contain function signature metadata provided via the new annotations syntax in Python 3 (annotations are covered in the next section).
+
+An =inspect.Signature= object has a =bind= method that takes any number of arguments and binds them to the parameters in the signature, applying the usual rules for matching actual arguments to formal parameters. This can be used by a framework to validate arguments prior to the actual function invocation. [[file:ch05.html#ex_clip_signature][Example 5-18]] shows how.
+
+
+
+Example 5-18. Binding the function signature from the tag function in [[file:ch05.html#tagger_ex][Example 5-10]] to a dict of arguments
+
+#+BEGIN_EXAMPLE
+    >>> import inspect
+    >>> sig = inspect.signature(tag)  
+    >>> my_tag = {'name': 'img', 'title': 'Sunset Boulevard',
+    ...           'src': 'sunset.jpg', 'cls': 'framed'}
+    >>> bound_args = sig.bind(**my_tag)  
+    >>> bound_args
+    <inspect.BoundArguments object at 0x...>  
+    >>> for name, value in bound_args.arguments.items():  
+    ...     print(name, '=', value)
+    ...
+    name = img
+    cls = framed
+    attrs = {'title': 'Sunset Boulevard', 'src': 'sunset.jpg'}
+    >>> del my_tag['name']  
+    >>> bound_args = sig.bind(**my_tag)  
+    Traceback (most recent call last):
+      ...
+    TypeError: 'name' parameter lacking default value
+#+END_EXAMPLE
+
+- [[#CO56-1][[[file:callouts/1.png]]]]  :: Get the signature from =tag= function in [[file:ch05.html#tagger_ex][Example 5-10]].
+
+- [[#CO56-2][[[file:callouts/2.png]]]]  :: Pass a =dict= of arguments to =.bind()=.
+
+- [[#CO56-3][[[file:callouts/3.png]]]]  :: An =inspect.BoundArguments= object is produced.
+
+- [[#CO56-4][[[file:callouts/4.png]]]]  :: Iterate over the items in =bound_args.arguments=, which is an =OrderedDict=, to display the names and values of the arguments.
+
+- [[#CO56-5][[[file:callouts/5.png]]]]  :: Remove the mandatory argument =name= from =my_tag=.
+
+- [[#CO56-6][[[file:callouts/6.png]]]]  :: Calling =sig.bind(**my_tag)= raises a =TypeError= complaining of the missing =name= parameter.
+
+This example shows how the Python data model, with the help of =inspect=, exposes the same machinery the interpreter uses to bind arguments to formal parameters in function calls.
+
+Frameworks and tools like IDEs can use this information to validate code. Another feature of Python 3, function annotations, enhances the possible uses of this, as we will see next.
+
+** Function Annotations
+
+
+Python 3 provides syntax to attach metadata to the parameters of a function declaration and its return value. [[file:ch05.html#ex_clip_annot][Example 5-19]] is an annotated version of [[file:ch05.html#ex_clip][Example 5-15]]. The only differences are in the first line.
+
+
+
+Example 5-19. Annotated clip function
+
+#+BEGIN_EXAMPLE
+    def clip(text:str, max_len:'int > 0'=80) -> str:   
+        """Return text clipped at the last space before or after max_len
+        """
+        end = None
+        if len(text) > max_len:
+            space_before = text.rfind(' ', 0, max_len)
+            if space_before >= 0:
+                end = space_before
+            else:
+                space_after = text.rfind(' ', max_len)
+                if space_after >= 0:
+                    end = space_after
+        if end is None:  # no spaces were found
+            end = len(text)
+        return text[:end].rstrip()
+#+END_EXAMPLE
+
+- [[#CO57-1][[[file:callouts/1.png]]]]  :: The annotated function declaration.
+
+Each argument in the function declaration may have an annotation expression preceded by =:=. If there is a default value, the annotation goes between the argument name and the === sign. To annotate the return value, add =->= and another expression between the =)= and the =:= at the tail of the function declaration. The expressions may be of any type. The most common types used in annotations are classes, like =str= or =int=, or strings, like ='int > 0'=, as seen in the annotation for =max_len= in [[file:ch05.html#ex_clip_annot][Example 5-19]].
+
+No processing is done with the annotations. They are merely stored in the =__annotations__= attribute of the function, a =dict=:
+
+#+BEGIN_EXAMPLE
+    >>> from clip_annot import clip
+    >>> clip.__annotations__
+    {'text': <class 'str'>, 'max_len': 'int > 0', 'return': <class 'str'>}
+#+END_EXAMPLE
+
+The item with key ='return'= holds the return value annotation marked with =->= in the function declaration in [[file:ch05.html#ex_clip_annot][Example 5-19]].
+
+The only thing Python does with annotations is to store them in the =__annotations__= attribute of the function. Nothing else: no checks, enforcement, validation, or any other action is performed. In other words, annotations have no meaning to the Python interpreter. They are just metadata that may be used by tools, such as IDEs, frameworks, and decorators. At this writing no tools that use this metadata exist in the standard library, except that =inspect.signature()= knows how to extract the annotations, as [[file:ch05.html#ex_clip_annot_signature][Example 5-20]] shows.
+
+
+
+Example 5-20. Extracting annotations from the function signature
+
+#+BEGIN_EXAMPLE
+    >>> from clip_annot import clip
+    >>> from inspect import signature
+    >>> sig = signature(clip)
+    >>> sig.return_annotation
+    <class 'str'>
+    >>> for param in sig.parameters.values():
+    ...     note = repr(param.annotation).ljust(13)
+    ...     print(note, ':', param.name, '=', param.default)
+    <class 'str'> : text = <class 'inspect._empty'>
+    'int > 0'     : max_len = 80
+#+END_EXAMPLE
+
+The =signature= function returns a =Signature= object, which has a =return_annotation= attribute and a =parameters= dictionary mapping parameter names to =Parameter= objects. Each =Parameter= object has its own =annotation= attribute. That's how [[file:ch05.html#ex_clip_annot_signature][Example 5-20]] works.
+
+In the future, frameworks such as Bobo could support annotations to further automate request processing. For example, an argument annotated as =price:float= may be automatically converted from a query string to the =float= expected by the function; a string annotation like =quantity:'int > 0'= might be parsed to perform conversion and validation of a parameter.
+
+The biggest impact of function annotations will probably not be dynamic settings such as Bobo, but in providing optional type information for static type checking in tools like IDEs and linters.
+
+After this deep dive into the anatomy of functions, the remainder of this chapter covers the most useful packages in the standard library that support functional programming.
+
+** Packages for Functional Programming
+
+
+Although Guido makes it clear that Python does not aim to be a functional programming language, a functional coding style can be used to good extent, thanks to the support of packages like =operator= and =functools=, which we cover in the next two sections.
+
+*** The operator Module
+    :PROPERTIES:
+    :CUSTOM_ID: operator_module_section
+    :CLASS: title
+    :END:
+
+Often in functional programming it is convenient to use an arithmetic operator as a function. For example, suppose you want to multiply a sequence of numbers to calculate factorials without using recursion. To perform summation, you can use =sum=, but there is no equivalent function for multiplication. You could use =reduce=---as we saw in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]]---but this requires a function to multiply two items of the sequence. [[file:ch05.html#fact_reduce_lambda_ex][Example 5-21]] shows how to solve this using =lambda=.
+
+
+
+Example 5-21. Factorial implemented with reduce and an anonymous function
+
+#+BEGIN_EXAMPLE
+    from functools import reduce
+
+    def fact(n):
+        return reduce(lambda a, b: a*b, range(1, n+1))
+#+END_EXAMPLE
+
+To save you the trouble of writing trivial anonymous functions like =lambda a, b: a*b=, the =operator= module provides function equivalents for dozens of arithmetic operators. With it, we can rewrite [[file:ch05.html#fact_reduce_lambda_ex][Example 5-21]] as [[file:ch05.html#fact_reduce_operator_ex][Example 5-22]].
+
+
+
+Example 5-22. Factorial implemented with reduce and operator.mul
+
+#+BEGIN_EXAMPLE
+    from functools import reduce
+    from operator import mul
+
+    def fact(n):
+        return reduce(mul, range(1, n+1))
+#+END_EXAMPLE
+
+Another group of one-trick lambdas that =operator= replaces are functions to pick items from sequences or read attributes from objects: =itemgetter= and =attrgetter= actually build custom functions to do that.
+
+[[file:ch05.html#itemgetter_demo][Example 5-23]] shows a common use of =itemgetter=: sorting a list of tuples by the value of one field. In the example, the cities are printed sorted by country code (field 1). Essentially, =itemgetter(1)= does the same as =lambda fields: fields[1]=: create a function that, given a collection, returns the item at index 1.
+
+
+
+Example 5-23. Demo of itemgetter to sort a list of tuples (data from [[file:ch02.html#ex_nested_tuple][Example 2-8]])
+
+#+BEGIN_EXAMPLE
+    >>> metro_data = [
+    ...     ('Tokyo', 'JP', 36.933, (35.689722, 139.691667)),
+    ...     ('Delhi NCR', 'IN', 21.935, (28.613889, 77.208889)),
+    ...     ('Mexico City', 'MX', 20.142, (19.433333, -99.133333)),
+    ...     ('New York-Newark', 'US', 20.104, (40.808611, -74.020386)),
+    ...     ('Sao Paulo', 'BR', 19.649, (-23.547778, -46.635833)),
+    ... ]
+    >>>
+    >>> from operator import itemgetter
+    >>> for city in sorted(metro_data, key=itemgetter(1)):
+    ...     print(city)
+    ...
+    ('Sao Paulo', 'BR', 19.649, (-23.547778, -46.635833))
+    ('Delhi NCR', 'IN', 21.935, (28.613889, 77.208889))
+    ('Tokyo', 'JP', 36.933, (35.689722, 139.691667))
+    ('Mexico City', 'MX', 20.142, (19.433333, -99.133333))
+    ('New York-Newark', 'US', 20.104, (40.808611, -74.020386))
+#+END_EXAMPLE
+
+If you pass multiple index arguments to =itemgetter=, the function it builds will return tuples with the extracted values:
+
+#+BEGIN_EXAMPLE
+    >>> cc_name = itemgetter(1, 0)
+    >>> for city in metro_data:
+    ...     print(cc_name(city))
+    ...
+    ('JP', 'Tokyo')
+    ('IN', 'Delhi NCR')
+    ('MX', 'Mexico City')
+    ('US', 'New York-Newark')
+    ('BR', 'Sao Paulo')
+    >>>
+#+END_EXAMPLE
+
+Because =itemgetter= uses the =[]= operator, it supports not only sequences but also mappings and any class that implements =__getitem__=.
+
+A sibling of =itemgetter= is =attrgetter=, which creates functions to extract object attributes by name. If you pass =attrgetter= several attribute names as arguments, it also returns a tuple of values. In addition, if any argument name contains a =.= (dot), =attrgetter= navigates through nested objects to retrieve the attribute. These behaviors are shown in [[file:ch05.html#attrgetter_demo][Example 5-24]]. This is not the shortest console session because we need to build a nested structure to showcase the handling of dotted attributes by =attrgetter=.
+
+
+
+Example 5-24. Demo of attrgetter to process a previously defined list of namedtuple called metro_data (the same list that appears in [[file:ch05.html#itemgetter_demo][Example 5-23]])
+
+#+BEGIN_EXAMPLE
+    >>> from collections import namedtuple
+    >>> LatLong = namedtuple('LatLong', 'lat long')  # 
+    >>> Metropolis = namedtuple('Metropolis', 'name cc pop coord')  # 
+    >>> metro_areas = [Metropolis(name, cc, pop, LatLong(lat, long))  # 
+    ...     for name, cc, pop, (lat, long) in metro_data]
+    >>> metro_areas[0]
+    Metropolis(name='Tokyo', cc='JP', pop=36.933, coord=LatLong(lat=35.689722,
+    long=139.691667))
+    >>> metro_areas[0].coord.lat  # 
+    35.689722
+    >>> from operator import attrgetter
+    >>> name_lat = attrgetter('name', 'coord.lat')  # 
+    >>>
+    >>> for city in sorted(metro_areas, key=attrgetter('coord.lat')):  # 
+    ...     print(name_lat(city))  # 
+    ...
+    ('Sao Paulo', -23.547778)
+    ('Mexico City', 19.433333)
+    ('Delhi NCR', 28.613889)
+    ('Tokyo', 35.689722)
+    ('New York-Newark', 40.808611)
+#+END_EXAMPLE
+
+- [[#CO58-1][[[file:callouts/1.png]]]]  :: Use =namedtuple= to define =LatLong=.
+
+- [[#CO58-2][[[file:callouts/2.png]]]]  :: Also define =Metropolis=.
+
+- [[#CO58-3][[[file:callouts/3.png]]]]  :: Build =metro_areas= list with =Metropolis= instances; note the nested tuple unpacking to extract =(lat, long)= and use them to build the =LatLong= for the =coord= attribute of =Metropolis=.
+
+- [[#CO58-4][[[file:callouts/4.png]]]]  :: Reach into element =metro_areas[0]= to get its latitude.
+
+- [[#CO58-5][[[file:callouts/5.png]]]]  :: Define an =attrgetter= to retrieve the =name= and the =coord.lat= nested attribute.
+
+- [[#CO58-6][[[file:callouts/6.png]]]]  :: Use =attrgetter= again to sort list of cities by latitude.
+
+- [[#CO58-7][[[file:callouts/7.png]]]]  :: Use the =attrgetter= defined in [[file:ch05.html#CO58-5][[[file:callouts/5.png]]]] to show only city name and latitude.
+
+Here is a partial list of functions defined in =operator= (names starting with =_= are omitted, because they are mostly implementation details):
+
+#+BEGIN_EXAMPLE
+    >>> [name for name in dir(operator) if not name.startswith('_')]
+    ['abs', 'add', 'and_', 'attrgetter', 'concat', 'contains',
+    'countOf', 'delitem', 'eq', 'floordiv', 'ge', 'getitem', 'gt',
+    'iadd', 'iand', 'iconcat', 'ifloordiv', 'ilshift', 'imod', 'imul',
+    'index', 'indexOf', 'inv', 'invert', 'ior', 'ipow', 'irshift',
+    'is_', 'is_not', 'isub', 'itemgetter', 'itruediv', 'ixor', 'le',
+    'length_hint', 'lshift', 'lt', 'methodcaller', 'mod', 'mul', 'ne',
+    'neg', 'not_', 'or_', 'pos', 'pow', 'rshift', 'setitem', 'sub',
+    'truediv', 'truth', 'xor']
+#+END_EXAMPLE
+
+Most of the 52 names listed are self-evident. The group of names prefixed with =i= and the name of another operator---e.g., =iadd=, =iand=, etc.---correspond to the augmented assignment operators---e.g., =+==, =&==, etc. These change their first argument in place, if it is mutable; if not, the function works like the one without the =i= prefix: it simply returns the result of the operation.
+
+Of the remaining =operator= functions, =methodcaller= is the last we will cover. It is somewhat similar to =attrgetter= and =itemgetter= in that it creates a function on the fly. The function it creates calls a method by name on the object given as argument, as shown in [[file:ch05.html#methodcaller_demo][Example 5-25]].
+
+
+
+Example 5-25. Demo of methodcaller: second test shows the binding of extra arguments
+
+#+BEGIN_EXAMPLE
+    >>> from operator import methodcaller
+    >>> s = 'The time has come'
+    >>> upcase = methodcaller('upper')
+    >>> upcase(s)
+    'THE TIME HAS COME'
+    >>> hiphenate = methodcaller('replace', ' ', '-')
+    >>> hiphenate(s)
+    'The-time-has-come'
+#+END_EXAMPLE
+
+The first test in [[file:ch05.html#methodcaller_demo][Example 5-25]] is there just to show =methodcaller= at work, but if you need to use the =str.upper= as a function, you can just call it on the =str= class and pass a string as argument, like this:
+
+#+BEGIN_EXAMPLE
+    >>> str.upper(s)
+    'THE TIME HAS COME'
+#+END_EXAMPLE
+
+The second test in [[file:ch05.html#methodcaller_demo][Example 5-25]] shows that =methodcaller= can also do a partial application to freeze some arguments, like the =functools.partial= function does. That is our next subject.
+
+*** Freezing Arguments with functools.partial
+    :PROPERTIES:
+    :CUSTOM_ID: functools_partial_sec
+    :CLASS: title
+    :END:
+
+The =functools= module brings together a handful of higher-order functions. The best known of them is probably =reduce=, which was covered in [[file:ch05.html#map_filter_reduce][Modern Replacements for map, filter, and reduce]]. Of the remaining functions in =functools=, the most useful is =partial= and its variation, =partialmethod=.
+
+=functools.partial= is a higher-order function that allows partial application of a function. Given a function, a partial application produces a new callable with some of the arguments of the original function fixed. This is useful to adapt a function that takes one or more arguments to an API that requires a callback with fewer arguments. [[file:ch05.html#ex_partial_mul][Example 5-26]] is a trivial demonstration.
+
+
+
+Example 5-26. Using partial to use a two-argument function where a one-argument callable is required
+
+#+BEGIN_EXAMPLE
+    >>> from operator import mul
+    >>> from functools import partial
+    >>> triple = partial(mul, 3)  
+    >>> triple(7)  
+    21
+    >>> list(map(triple, range(1, 10)))  
+    [3, 6, 9, 12, 15, 18, 21, 24, 27]
+#+END_EXAMPLE
+
+- [[#CO59-1][[[file:callouts/1.png]]]]  :: Create new =triple= function from =mul=, binding first positional argument to =3=.
+
+- [[#CO59-2][[[file:callouts/2.png]]]]  :: Test it.
+
+- [[#CO59-3][[[file:callouts/3.png]]]]  :: Use =triple= with =map=; =mul= would not work with =map= in this example.
+
+A more useful example involves the =unicode.normalize= function that we saw in [[file:ch04.html#normalizing_unicode][Normalizing Unicode for Saner Comparisons]]. If you work with text from many languages, you may want to apply =unicode.normalize('NFC', s)= to any string =s= before comparing or storing it. If you do that often, it's handy to have an =nfc= function to do so, as in [[file:ch05.html#ex_partial_nfc][Example 5-27]].
+
+
+
+Example 5-27. Building a convenient Unicode normalizing function with partial
+
+#+BEGIN_EXAMPLE
+    >>> import unicodedata, functools
+    >>> nfc = functools.partial(unicodedata.normalize, 'NFC')
+    >>> s1 = 'café'
+    >>> s2 = 'cafeu0301'
+    >>> s1, s2
+    ('café', 'café')
+    >>> s1 == s2
+    False
+    >>> nfc(s1) == nfc(s2)
+    True
+#+END_EXAMPLE
+
+=partial= takes a callable as first argument, followed by an arbitrary number of positional and keyword arguments to bind.
+
+[[file:ch05.html#partial_demo][Example 5-28]] shows the use of =partial= with the =tag= function from [[file:ch05.html#tagger_ex][Example 5-10]], to freeze one positional argument and one keyword argument.
+
+
+
+Example 5-28. Demo of partial applied to the function tag from [[file:ch05.html#tagger_ex][Example 5-10]]
+
+#+BEGIN_EXAMPLE
+    >>> from tagger import tag
+    >>> tag
+    <function tag at 0x10206d1e0>  
+    >>> from functools import partial
+    >>> picture = partial(tag, 'img', cls='pic-frame')  
+    >>> picture(src='wumpus.jpeg')
+    '<img class="pic-frame" src="wumpus.jpeg" />'  
+    >>> picture
+    functools.partial(<function tag at 0x10206d1e0>, 'img', cls='pic-frame')  
+    >>> picture.func  
+    <function tag at 0x10206d1e0>
+    >>> picture.args
+    ('img',)
+    >>> picture.keywords
+    {'cls': 'pic-frame'}
+#+END_EXAMPLE
+
+- [[#CO60-1][[[file:callouts/1.png]]]]  :: Import =tag= from [[file:ch05.html#tagger_ex][Example 5-10]] and show its ID.
+
+- [[#CO60-2][[[file:callouts/2.png]]]]  :: Create =picture= function from =tag= by fixing the first positional argument with ='img'= and the =cls= keyword argument with ='pic-frame'=.
+
+- [[#CO60-3][[[file:callouts/3.png]]]]  :: =picture= works as expected.
+
+- [[#CO60-4][[[file:callouts/4.png]]]]  :: =partial()= returns a =functools.partial= object.^{[[[#ftn.id1045303][32]]]}
+
+- [[#CO60-5][[[file:callouts/5.png]]]]  :: A =functools.partial= object has attributes providing access to the original function and the fixed arguments.
+
+The =functools.partialmethod= function (new in Python 3.4) does the same job as =partial=, but is designed to work with methods.
+
+An impressive =functools= function is =lru_cache=, which does memoization---a form of automatic optimization that works by storing the results of function calls to avoid expensive recalculations. We will cover it in [[file:ch07.html][Chapter 7]], where decorators are explained, along with other higher-order functions designed to be used as decorators: =singledispatch= and =wraps=.
+
+** Chapter Summary
+
+
+The goal of this chapter was to explore the first-class nature of functions in Python. The main ideas are that you can assign functions to variables, pass them to other functions, store them in data structures, and access function attributes, allowing frameworks and tools to act on that information. Higher-order functions, a staple of functional programming, are common in Python---even if the use of =map=, =filter=, and =reduce= is not as frequent as it was---thanks to list comprehensions (and similar constructs like generator expressions) and the appearance of reducing built-ins like =sum=, =all=, and =any=. The =sorted=, =min=, =max= built-ins, and =functools.partial= are examples of commonly used higher-order functions in the language.
+
+Callables come in seven different flavors in Python, from the simple functions created with =lambda= to instances of classes implementing =__call__=. They can all be detected by the =callable()= built-in. Every callable supports the same rich syntax for declaring formal parameters, including keyword-only parameters and annotations---both new features introduced with Python 3.
+
+Python functions and their annotations have a rich set of attributes that can be read with the help of the =inspect= module, which includes the =Signature.bind= method to apply the flexible rules that Python uses to bind actual arguments to declared parameters.
+
+Lastly, we covered some functions from the =operator= module and =functools.partial=, which facilitate functional programming by minimizing the need for the functionally challenged =lambda= syntax.
+
+** Further Reading
+
+
+The next two chapters continue our exploration of programming with function objects. [[file:ch06.html][Chapter 6]] shows how first-class functions can simplify some classic object-oriented design patterns, while [[file:ch07.html][Chapter 7]] dives into function decorators---a special kind of higher-order function---and the closure mechanism that makes them work.
+
+Chapter 7 of the /[[http://shop.oreilly.com/product/0636920027072.do][Python Cookbook, Third Edition]]/ (O'Reilly), by David Beazley and Brian K. Jones, is an excellent complement to the current chapter as well as [[file:ch07.html][Chapter 7]] of this book, covering mostly the same concepts with a different approach.
+
+In /The Python Language Reference/, [[http://bit.ly/1Vm8dv2][“3.2. The standard type hierarchy”]] presents the seven callable types, along with all the other built-in types.
+
+The Python-3-only features discussed in this chapter have their own PEPs: [[https://www.python.org/dev/peps/pep-3102/][PEP 3102 --- Keyword-Only Arguments]] and [[https://www.python.org/dev/peps/pep-3107/][PEP 3107 --- Function Annotations]].
+
+For more about the current (as of mid-2014) use of annotations, two Stack Overflow questions are worth reading: [[http://bit.ly/1FHiOXf][“What are good uses for Python3's ‘Function Annotations'”]] has a practical answer and insightful comments by Raymond Hettinger, and the answer for [[http://bit.ly/1FHiN5F][“What good are Python function annotations?”]] quotes extensively from Guido van Rossum.
+
+[[https://www.python.org/dev/peps/pep-0362/][PEP 362 --- Function Signature Object]] is worth reading if you intend to use the =inspect= module that implements that feature.
+
+A great introduction to functional programming in Python is A. M. Kuchling's [[http://docs.python.org/3/howto/functional.html][Python Functional Programming HOWTO]]. The main focus of that text, however, is on the use of iterators and generators, which are the subject of [[file:ch14.html][Chapter 14]].
+
+[[https://github.com/kachayev/fn.py][=fn.py=]] is a package to support functional programming in Python 2 and 3. According to its author, Alexey Kachayev, =fn.py= provides “implementation of missing features to enjoy FP” in Python. It includes a =@recur.tco= decorator that implements tail-call optimization for unlimited recursion in Python, among many other functions, data structures, and recipes.
+
+The StackOverflow question [[http://bit.ly/1FHiTdh][“Python: Why is functools.partial necessary?”]] has a highly informative (and funny) reply by Alex Martelli, author of the classic /Python in a Nutshell/.
+
+Jim Fulton's Bobo was probably the first web framework that deserved to be called object-oriented. If you were intrigued by it and want to learn more about its modern rewrite, start at its [[http://bobo.readthedocs.org/en/latest/][Introduction]]. A little of the early history of Bobo appears in a comment by Phillip J. Eby in a [[http://bit.ly/1FHiUxR][discussion at Joel Spolsky's blog]].
+
+
+
+Soapbox
+
+*About Bobo*
+
+I owe my Python career to Bobo. I used it in my first Python web project in 1998. I discovered Bobo while looking for an object-oriented way to code web applications, after trying Perl and Java alternatives.
+
+In 1997, Bobo had pioneered the object publishing concept: direct mapping from URLs to a hierarchy of objects, with no need to configure routes. I was hooked when I saw the beauty of this. Bobo also featured automatic HTTP query handling based on analysis of the signatures of the methods or functions used to handle requests.
+
+Bobo was created by Jim Fulton, known as “The Zope Pope” thanks to his leading role in the development of the Zope framework, the foundation of the Plone CMS, SchoolTool, ERP5, and other large-scale Python projects. Jim is also the creator of ZODB---the Zope Object Database---a transactional object database that provides ACID (atomicity, consistency, isolation, and durability), designed for ease of use from Python.
+
+Jim has since rewritten Bobo from scratch to support WSGI and modern Python (including Python 3). As of this writing, Bobo uses the =six= library to do the function introspection, in order to be compatible with Python 2 and Python 3 in spite of the changes in function objects and related APIs.
+
+*Is Python a Functional Language?*
+
+Around the year 2000, I was at a training in the United States when Guido van Rossum dropped by the classroom (he was not the instructor). In the Q&A that followed, somebody asked him which features of Python were borrowed from other languages. His answer: “Everything that is good in Python was stolen from other languages.”
+
+Shriram Krishnamurthi, professor of Computer Science at Brown University, starts his [[http://bit.ly/1FHj4p2][“Teaching Programming Languages in a Post-Linnaean Age” paper]] with this:
+
+#+BEGIN_QUOTE
+  Programming language “paradigms” are a moribund and tedious legacy of a bygone age. Modern language designers pay them no respect, so why do our courses slavishly adhere to them?
+#+END_QUOTE
+
+In that paper, Python is mentioned by name in this passage:
+
+#+BEGIN_QUOTE
+  What else to make of a language like Python, Ruby, or Perl? Their designers have no patience for the niceties of these Linnaean hierarchies; they borrow features as they wish, creating melanges that utterly defy characterization.
+#+END_QUOTE
+
+Krishnamurthi submits that instead of trying to classify languages in some taxonomy, it's more useful to consider them as aggregations of features.
+
+Even if it was not Guido's goal, endowing Python with first-class functions opened the door to functional programming. In his post [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], he says that =map=, =filter=, and =reduce= were the motivation for adding =lambda= to Python in the first place. All of these features were contributed together by Amrit Prem for Python 1.0 in 1994 (according to [[http://hg.python.org/cpython/file/default/Misc/HISTORY][Misc/HISTORY]] in the CPython source code).
+
+=lambda=, =map=, =filter=, and =reduce= first appeared in Lisp, the original functional language. However, Lisp does not limit what can be done inside a =lambda=, because everything in Lisp is an expression. Python uses a statement-oriented syntax in which expressions cannot contain statements, and many language constructs are statements---including =try/catch=, which is what I miss most often when writing =lambdas=. This is the price to pay for Python's highly readable syntax.^{[[[#ftn.id649852][33]]]} Lisp has many strengths, but readability is not one of them.
+
+Ironically, stealing the list comprehension syntax from another functional language---Haskell---significantly diminished the need for =map= and =filter=, and also for =lambda=.
+
+Besides the limited anonymous function syntax, the biggest obstacle to wider adoption of functional programming idioms in Python is the lack of tail-recursion elimination, an optimization that allows memory-efficient computation of a function that makes a recursive call at the “tail” of its body. In another blog post, [[http://bit.ly/1FHjdZv][“Tail Recursion Elimination”]], Guido gives several reasons why such optimization is not a good fit for Python. That post is a great read for the technical arguments, but even more so because the first three and most important reasons given are usability issues. It is no accident that Python is a pleasure to use, learn, and teach. Guido made it so.
+
+So there you have it: Python is, by design, not a functional language---whatever that means. Python just borrows a few good ideas from functional languages.
+
+*The Problem with Anonymous Functions*
+
+Beyond the Python-specific syntax constraints, anonymous functions have a serious drawback in every language: they have no name.
+
+I am only half joking here. Stack traces are easier to read when functions have names. Anonymous functions are a handy shortcut, people have fun coding with them, but sometimes they get carried away---especially if the language and environment encourage deep nesting of anonymous functions, like JavaScript on Node.js. Lots of nested anonymous functions make debugging and error handling hard. Asynchronous programming in Python is more structured, perhaps because the limited =lambda= demands it. I promise to write more about asynchronous programming in the future, but this subject must be deferred to [[file:ch18.html][Chapter 18]]. By the way, promises, futures, and deferreds are concepts used in modern asynchronous APIs. Along with coroutines, they provide an escape from the so-called “callback hell.” We'll see how callback-free asynchronous programming works in [[file:ch18.html#callbacks2coros][From Callbacks to Futures and Coroutines]].
+
+
+
+--------------
+
+
+^{[[[#id488628][31]]]} [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], from Guido's The History of Python blog.
+
+
+^{[[[#id1045303][32]]]} The [[http://bit.ly/1Vm8cqQ][source code]] for =functools.py= reveals that the =functools.partial= class is implemented in C and is used by default. If that is not available, a pure-Python implementation of =partial= is available since Python 3.4.in the =functools= module.
+
+
+^{[[[#id649852][33]]]} There also the problem of lost indentation when pasting code to Web forums, but I digress.
+
+
+dent that Python is a pleasure to use, learn, and teach. Guido made it so.
+
+So there you have it: Python is, by design, not a functional language---whatever that means. Python just borrows a few good ideas from functional languages.
+
+*The Problem with Anonymous Functions*
+
+Beyond the Python-specific syntax constraints, anonymous functions have a serious drawback in every language: they have no name.
+
+I am only half joking here. Stack traces are easier to read when functions have names. Anonymous functions are a handy shortcut, people have fun coding with them, but sometimes they get carried away---especially if the language and environment encourage deep nesting of anonymous functions, like JavaScript on Node.js. Lots of nested anonymous functions make debugging and error handling hard. Asynchronous programming in Python is more structured, perhaps because the limited =lambda= demands it. I promise to write more about asynchronous programming in the future, but this subject must be deferred to [[file:ch18.html][Chapter 18]]. By the way, promises, futures, and deferreds are concepts used in modern asynchronous APIs. Along with coroutines, they provide an escape from the so-called “callback hell.” We'll see how callback-free asynchronous programming works in [[file:ch18.html#callbacks2coros][From Callbacks to Futures and Coroutines]].
+
+
+
+--------------
+
+
+^{[[[#id488628][31]]]} [[http://bit.ly/1FHfhIo][“Origins of Python's /Functional/ Features”]], from Guido's The History of Python blog.
+
+
+^{[[[#id1045303][32]]]} The [[http://bit.ly/1Vm8cqQ][source code]] for =functools.py= reveals that the =functools.partial= class is implemented in C and is used by default. If that is not available, a pure-Python implementation of =partial= is available since Python 3.4.in the =functools= module.
+
+
+^{[[[#id649852][33]]]} There also the problem of lost indentation when pasting code to Web forums, but I digress.
+
+
+ when pasting code to Web forums, but I digress.
+
+

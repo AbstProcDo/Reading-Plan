@@ -1,0 +1,1870 @@
+** Chapter 14. Iterables, Iterators, and Generators
+
+
+Perhaps you know all the functions mentioned in this section, but some of them are underused, so a quick overview may be good to recall what's already available.
+
+The first group are filtering generator functions: they yield a subset of items produced by the input iterable, without changing the items themselves. We used =itertools.takewhile= previously in this chapter, in [[file:ch14.html#ap_itertools_sec][Arithmetic Progression with itertools]]. Like =takewhile=, most functions listed in [[file:ch14.html#filter_genfunc_tbl][Table 14-1]] take a =predicate=, which is a one-argument Boolean function that will be applied to each item in the input to determine whether the item is included in the output.
+
+
+
+Table 14-1. Filtering generator functions
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=compress(it, selector_it)=
+
+Consumes two iterables in parallel; yields items from =it= whenever the corresponding item in =selector_it= is truthy
+
+=itertools=
+
+=dropwhile(predicate, it)=
+
+Consumes =it= skipping items while =predicate= computes truthy, then yields every remaining item (no further checks are made)
+
+(built-in)
+
+=filter(predicate, it)=
+
+Applies =predicate= to each item of =iterable=, yielding the item if =predicate(item)= is truthy; if =predicate= is =None=, only truthy items are yielded
+
+=itertools=
+
+=filterfalse(predicate, it)=
+
+Same as =filter=, with the =predicate= logic negated: yields items whenever =predicate= computes falsy
+
+=itertools=
+
+=islice(it, stop) or islice(it, start, stop, step=1)=
+
+Yields items from a slice of =it=, similar to =s[:stop]= or =s[start:stop:step]= except =it= can be any iterable, and the operation is lazy
+
+=itertools=
+
+=takewhile(predicate, it)=
+
+Yields items while =predicate= computes truthy, then stops and no further checks are made
+
+The console listing in [[file:ch14.html#demo_filter_genfunc][Example 14-14]] shows the use of all functions in [[file:ch14.html#filter_genfunc_tbl][Table 14-1]].
+
+
+
+Example 14-14. Filtering generator functions examples
+
+#+BEGIN_EXAMPLE
+    >>> def vowel(c):
+    ...     return c.lower() in 'aeiou'
+    ...
+    >>> list(filter(vowel, 'Aardvark'))
+    ['A', 'a', 'a']
+    >>> import itertools
+    >>> list(itertools.filterfalse(vowel, 'Aardvark'))
+    ['r', 'd', 'v', 'r', 'k']
+    >>> list(itertools.dropwhile(vowel, 'Aardvark'))
+    ['r', 'd', 'v', 'a', 'r', 'k']
+    >>> list(itertools.takewhile(vowel, 'Aardvark'))
+    ['A', 'a']
+    >>> list(itertools.compress('Aardvark', (1,0,1,1,0,1)))
+    ['A', 'r', 'd', 'a']
+    >>> list(itertools.islice('Aardvark', 4))
+    ['A', 'a', 'r', 'd']
+    >>> list(itertools.islice('Aardvark', 4, 7))
+    ['v', 'a', 'r']
+    >>> list(itertools.islice('Aardvark', 1, 7, 2))
+    ['a', 'd', 'a']
+#+END_EXAMPLE
+
+The next group are the mapping generators: they yield items computed from each individual item in the input iterable---or iterables, in the case of =map= and =starmap=.^{[[[#ftn.id1007011][114]]]} The generators in [[file:ch14.html#mapping_genfunc_tbl][Table 14-2]] yield one result per item in the input iterables. If the input comes from more than one iterable, the output stops as soon as the first input iterable is exhausted.
+
+
+
+Table 14-2. Mapping generator functions
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=accumulate(it, [func])=
+
+Yields accumulated sums; if =func= is provided, yields the result of applying it to the first pair of items, then to the first result and next item, etc.
+
+(built-in)
+
+=enumerate(iterable, start=0)=
+
+Yields 2-tuples of the form =(index, item)=, where =index= is counted from =start=, and =item= is taken from the =iterable=
+
+(built-in)
+
+=map(func, it1, [it2, …, itN])=
+
+Applies =func= to each item of =it=, yielding the result; if N iterables are given, =func= must take N arguments and the iterables will be consumed in parallel
+
+=itertools=
+
+=starmap(func, it)=
+
+Applies =func= to each item of =it=, yielding the result; the input iterable should yield iterable items =iit=, and =func= is applied as =func(*iit)=
+
+[[file:ch14.html#demo_accumulate_genfunc][Example 14-15]] demonstrates some uses of =itertools.accumulate=.
+
+
+
+Example 14-15. itertools.accumulate generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> sample = [5, 4, 2, 8, 7, 6, 3, 0, 9, 1]
+    >>> import itertools
+    >>> list(itertools.accumulate(sample))  # 
+    [5, 9, 11, 19, 26, 32, 35, 35, 44, 45]
+    >>> list(itertools.accumulate(sample, min))  # 
+    [5, 4, 2, 2, 2, 2, 2, 0, 0, 0]
+    >>> list(itertools.accumulate(sample, max))  # 
+    [5, 5, 5, 8, 8, 8, 8, 8, 9, 9]
+    >>> import operator
+    >>> list(itertools.accumulate(sample, operator.mul))  # 
+    [5, 20, 40, 320, 2240, 13440, 40320, 0, 0, 0]
+    >>> list(itertools.accumulate(range(1, 11), operator.mul))
+    [1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]  # 
+#+END_EXAMPLE
+
+- [[#CO164-1][[[file:callouts/1.png]]]]  :: Running sum.
+
+- [[#CO164-2][[[file:callouts/2.png]]]]  :: Running minimum.
+
+- [[#CO164-3][[[file:callouts/3.png]]]]  :: Running maximum.
+
+- [[#CO164-4][[[file:callouts/4.png]]]]  :: Running product.
+
+- [[#CO164-5][[[file:callouts/5.png]]]]  :: Factorials from =1!= to =10!=.
+
+The remaining functions of [[file:ch14.html#mapping_genfunc_tbl][Table 14-2]] are shown in [[file:ch14.html#demo_mapping_genfunc][Example 14-16]].
+
+
+
+Example 14-16. Mapping generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> list(enumerate('albatroz', 1))  # 
+    [(1, 'a'), (2, 'l'), (3, 'b'), (4, 'a'), (5, 't'), (6, 'r'), (7, 'o'), (8, 'z')]
+    >>> import operator
+    >>> list(map(operator.mul, range(11), range(11)))  # 
+    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+    >>> list(map(operator.mul, range(11), [2, 4, 8]))  # 
+    [0, 4, 16]
+    >>> list(map(lambda a, b: (a, b), range(11), [2, 4, 8]))  # 
+    [(0, 2), (1, 4), (2, 8)]
+    >>> import itertools
+    >>> list(itertools.starmap(operator.mul, enumerate('albatroz', 1)))  # 
+    ['a', 'll', 'bbb', 'aaaa', 'ttttt', 'rrrrrr', 'ooooooo', 'zzzzzzzz']
+    >>> sample = [5, 4, 2, 8, 7, 6, 3, 0, 9, 1]
+    >>> list(itertools.starmap(lambda a, b: b/a,
+    ...     enumerate(itertools.accumulate(sample), 1)))  # 
+    [5.0, 4.5, 3.6666666666666665, 4.75, 5.2, 5.333333333333333,
+    5.0, 4.375, 4.888888888888889, 4.5]
+#+END_EXAMPLE
+
+- [[#CO165-1][[[file:callouts/1.png]]]]  :: Number the letters in the word, starting from =1=.
+
+- [[#CO165-2][[[file:callouts/2.png]]]]  :: Squares of integers from =0= to =10=.
+
+- [[#CO165-3][[[file:callouts/3.png]]]]  :: Multiplying numbers from two iterables in parallel: results stop when the shortest iterable ends.
+
+- [[#CO165-4][[[file:callouts/4.png]]]]  :: This is what the =zip= built-in function does.
+
+- [[#CO165-5][[[file:callouts/5.png]]]]  :: Repeat each letter in the word according to its place in it, starting from =1=.
+
+- [[#CO165-6][[[file:callouts/6.png]]]]  :: Running average.
+
+Next, we have the group of merging generators---all of these yield items from multiple input iterables. =chain= and =chain.from_iterable= consume the input iterables sequentially (one after the other), while =product=, =zip=, and =zip_longest= consume the input iterables in parallel. See [[file:ch14.html#merging_genfunc_tbl][Table 14-3]].
+
+
+
+Table 14-3. Generator functions that merge multiple input iterables
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=chain(it1, …, itN)=
+
+Yield all items from =it1=, then from =it2= etc., seamlessly
+
+=itertools=
+
+=chain.from_iterable(it)=
+
+Yield all items from each iterable produced by =it=, one after the other, seamlessly; =it= should yield iterable items, for example, a list of iterables
+
+=itertools=
+
+=product(it1, …, itN, repeat=1)=
+
+Cartesian product: yields N-tuples made by combining items from each input iterable like nested =for= loops could produce; =repeat= allows the input iterables to be consumed more than once
+
+(built-in)
+
+=zip(it1, …, itN)=
+
+Yields N-tuples built from items taken from the iterables in parallel, silently stopping when the first iterable is exhausted
+
+=itertools=
+
+=zip_longest(it1, …, itN, fillvalue=None)=
+
+Yields N-tuples built from items taken from the iterables in parallel, stopping only when the last iterable is exhausted, filling the blanks with the =fillvalue=
+
+[[file:ch14.html#demo_merging_genfunc][Example 14-17]] shows the use of the =itertools.chain= and =zip= generator functions and their siblings. Recall that the =zip= function is named after the zip fastener or zipper (no relation with compression). Both =zip= and =itertools.zip_longest= were introduced in [[file:ch10.html#zip_box][The Awesome zip]].
+
+
+
+Example 14-17. Merging generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.chain('ABC', range(2)))  # 
+    ['A', 'B', 'C', 0, 1]
+    >>> list(itertools.chain(enumerate('ABC')))  # 
+    [(0, 'A'), (1, 'B'), (2, 'C')]
+    >>> list(itertools.chain.from_iterable(enumerate('ABC')))  # 
+    [0, 'A', 1, 'B', 2, 'C']
+    >>> list(zip('ABC', range(5)))  # 
+    [('A', 0), ('B', 1), ('C', 2)]
+    >>> list(zip('ABC', range(5), [10, 20, 30, 40]))  # 
+    [('A', 0, 10), ('B', 1, 20), ('C', 2, 30)]
+    >>> list(itertools.zip_longest('ABC', range(5)))  # 
+    [('A', 0), ('B', 1), ('C', 2), (None, 3), (None, 4)]
+    >>> list(itertools.zip_longest('ABC', range(5), fillvalue='?'))  # 
+    [('A', 0), ('B', 1), ('C', 2), ('?', 3), ('?', 4)]
+#+END_EXAMPLE
+
+- [[#CO166-1][[[file:callouts/1.png]]]]  :: =chain= is usually called with two or more iterables.
+
+- [[#CO166-2][[[file:callouts/2.png]]]]  :: =chain= does nothing useful when called with a single iterable.
+
+- [[#CO166-3][[[file:callouts/3.png]]]]  :: But =chain.from_iterable= takes each item from the iterable, and chains them in sequence, as long as each item is itself iterable.
+
+- [[#CO166-4][[[file:callouts/4.png]]]]  :: =zip= is commonly used to merge two iterables into a series of two-tuples.
+
+- [[#CO166-5][[[file:callouts/5.png]]]]  :: Any number of iterables can be consumed by =zip= in parallel, but the generator stops as soon as the first iterable ends.
+
+- [[#CO166-6][[[file:callouts/6.png]]]]  :: =itertools.zip_longest= works like =zip=, except it consumes all input iterables to the end, padding output tuples with =None= as needed.
+
+- [[#CO166-7][[[file:callouts/7.png]]]]  :: The =fillvalue= keyword argument specifies a custom padding value.
+
+The =itertools.product= generator is a lazy way of computing Cartesian products, which we built using list comprehensions with more than one =for= clause in [[file:ch02.html#cartesian_product_sec][Cartesian Products]]. Generator expressions with multiple =for= clauses can also be used to produce Cartesian products lazily. [[file:ch14.html#demo_product_genfunc][Example 14-18]] demonstrates =itertools.product=.
+
+
+
+Example 14-18. itertools.product generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.product('ABC', range(2)))  # 
+    [('A', 0), ('A', 1), ('B', 0), ('B', 1), ('C', 0), ('C', 1)]
+    >>> suits = 'spades hearts diamonds clubs'.split()
+    >>> list(itertools.product('AK', suits))  # 
+    [('A', 'spades'), ('A', 'hearts'), ('A', 'diamonds'), ('A', 'clubs'),
+    ('K', 'spades'), ('K', 'hearts'), ('K', 'diamonds'), ('K', 'clubs')]
+    >>> list(itertools.product('ABC'))  # 
+    [('A',), ('B',), ('C',)]
+    >>> list(itertools.product('ABC', repeat=2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'B'),
+    ('B', 'C'), ('C', 'A'), ('C', 'B'), ('C', 'C')]
+    >>> list(itertools.product(range(2), repeat=3))
+    [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0),
+    (1, 0, 1), (1, 1, 0), (1, 1, 1)]
+    >>> rows = itertools.product('AB', range(2), repeat=2)
+    >>> for row in rows: print(row)
+    ...
+    ('A', 0, 'A', 0)
+    ('A', 0, 'A', 1)
+    ('A', 0, 'B', 0)
+    ('A', 0, 'B', 1)
+    ('A', 1, 'A', 0)
+    ('A', 1, 'A', 1)
+    ('A', 1, 'B', 0)
+    ('A', 1, 'B', 1)
+    ('B', 0, 'A', 0)
+    ('B', 0, 'A', 1)
+    ('B', 0, 'B', 0)
+    ('B', 0, 'B', 1)
+    ('B', 1, 'A', 0)
+    ('B', 1, 'A', 1)
+    ('B', 1, 'B', 0)
+    ('B', 1, 'B', 1)
+#+END_EXAMPLE
+
+- [[#CO167-1][[[file:callouts/1.png]]]]  :: The Cartesian product of a =str= with three characters and a =range= with two integers yields six tuples (because =3 * 2= is =6=).
+
+- [[#CO167-2][[[file:callouts/2.png]]]]  :: The product of two card ranks (='AK'=), and four suits is a series of eight tuples.
+
+- [[#CO167-3][[[file:callouts/3.png]]]]  :: Given a single iterable, =product= yields a series of one-tuples, not very useful.
+
+- [[#CO167-4][[[file:callouts/4.png]]]]  :: The =repeat=N= keyword argument tells product to consume each input iterable =N= times.
+
+Some generator functions expand the input by yielding more than one value per input item. They are listed in [[file:ch14.html#expanding_genfunc_tbl][Table 14-4]].
+
+
+
+Table 14-4. Generator functions that expand each input item into multiple output items
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=combinations(it, out_len)=
+
+Yield combinations of =out_len= items from the items yielded by =it=
+
+=itertools=
+
+=combinations_with_replacement(it, out_len)=
+
+Yield combinations of =out_len= items from the items yielded by =it=, including combinations with repeated items
+
+=itertools=
+
+=count(start=0, step=1)=
+
+Yields numbers starting at =start=, incremented by =step=, indefinitely
+
+=itertools=
+
+=cycle(it)=
+
+Yields items from =it= storing a copy of each, then yields the entire sequence repeatedly, indefinitely
+
+=itertools=
+
+=permutations(it, out_len=None)=
+
+Yield permutations of =out_len= items from the items yielded by =it=; by default, =out_len= is =len(list(it))=
+
+=itertools=
+
+=repeat(item, [times])=
+
+Yield the given item repeadedly, indefinetly unless a number of =times= is given
+
+The =count= and =repeat= functions from =itertools= return generators that conjure items out of nothing: neither of them takes an iterable as input. We saw =itertools.count= in [[file:ch14.html#ap_itertools_sec][Arithmetic Progression with itertools]]. The =cycle= generator makes a backup of the input iterable and yields its items repeatedly. [[file:ch14.html#demo_count_repeat_genfunc][Example 14-19]] illustrates the use of =count=, =repeat=, and =cycle=.
+
+
+
+Example 14-19. count, cycle, and repeat
+
+#+BEGIN_EXAMPLE
+    >>> ct = itertools.count()  # 
+    >>> next(ct)  # 
+    0
+    >>> next(ct), next(ct), next(ct)  # 
+    (1, 2, 3)
+    >>> list(itertools.islice(itertools.count(1, .3), 3))  # 
+    [1, 1.3, 1.6]
+    >>> cy = itertools.cycle('ABC')  # 
+    >>> next(cy)
+    'A'
+    >>> list(itertools.islice(cy, 7))  # 
+    ['B', 'C', 'A', 'B', 'C', 'A', 'B']
+    >>> rp = itertools.repeat(7)  # 
+    >>> next(rp), next(rp)
+    (7, 7)
+    >>> list(itertools.repeat(8, 4))  # 
+    [8, 8, 8, 8]
+    >>> list(map(operator.mul, range(11), itertools.repeat(5)))  # 
+    [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+#+END_EXAMPLE
+
+- [[#CO168-1][[[file:callouts/1.png]]]]  :: Build a =count= generator =ct=.
+
+- [[#CO168-2][[[file:callouts/2.png]]]]  :: Retrieve the first item from =ct=.
+
+- [[#CO168-3][[[file:callouts/3.png]]]]  :: I can't build a =list= from =ct=, because =ct= never stops, so I fetch the next three items.
+
+- [[#CO168-4][[[file:callouts/4.png]]]]  :: I can build a =list= from a =count= generator if it is limited by =islice= or =takewhile=.
+
+- [[#CO168-5][[[file:callouts/5.png]]]]  :: Build a =cycle= generator from ='ABC'= and fetch its first item, ='A'=.
+
+- [[#CO168-6][[[file:callouts/6.png]]]]  :: A =list= can only be built if limited by =islice=; the next seven items are retrieved here.
+
+- [[#CO168-7][[[file:callouts/7.png]]]]  :: Build a =repeat= generator that will yield the number =7= forever.
+
+- [[#CO168-8][[[file:callouts/8.png]]]]  :: A =repeat= generator can be limited by passing the =times= argument: here the number =8= will be produced =4= times.
+
+- [[#CO168-9][[[file:callouts/9.png]]]]  :: A common use of =repeat=: providing a fixed argument in =map=; here it provides the =5= multiplier.
+
+The =combinations=, =combinations_with_replacement=, and =permutations= generator functions---together with =product=---are called the /combinatoric generators/ in the [[http://bit.ly/py-itertools][=itertools= documentation page]]. There is a close relationship between =itertools.product= and the remaining /combinatoric/ functions as well, as [[file:ch14.html#demo_conbinatoric_genfunc][Example 14-20]] shows.
+
+
+
+Example 14-20. Combinatoric generator functions yield multiple values per input item
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.combinations('ABC', 2))  # 
+    [('A', 'B'), ('A', 'C'), ('B', 'C')]
+    >>> list(itertools.combinations_with_replacement('ABC', 2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')]
+    >>> list(itertools.permutations('ABC', 2))  # 
+    [('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'C'), ('C', 'A'), ('C', 'B')]
+    >>> list(itertools.product('ABC', repeat=2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'B'), ('B', 'C'),
+    ('C', 'A'), ('C', 'B'), ('C', 'C')]
+#+END_EXAMPLE
+
+- [[#CO169-1][[[file:callouts/1.png]]]]  :: All combinations of =len()==2= from the items in ='ABC'=; item ordering in the generated tuples is irrelevant (they could be sets).
+
+- [[#CO169-2][[[file:callouts/2.png]]]]  :: All combinations of =len()==2= from the items in ='ABC'=, including combinations with repeated items.
+
+- [[#CO169-3][[[file:callouts/3.png]]]]  :: All permutations of =len()==2= from the items in ='ABC'=; item ordering in the generated tuples is relevant.
+
+- [[#CO169-4][[[file:callouts/4.png]]]]  :: Cartesian product from ='ABC'= and ='ABC'= (that's the effect of =repeat=2=).
+
+The last group of generator functions we'll cover in this section are designed to yield all items in the input iterables, but rearranged in some way. Here are two functions that return multiple generators: =itertools.groupby= and =itertools.tee=. The other generator function in this group, the =reversed= built-in, is the only one covered in this section that does not accept any iterable as input, but only sequences. This makes sense: because =reversed= will yield the items from last to first, it only works with a sequence with a known length. But it avoids the cost of making a reversed copy of the sequence by yielding each item as needed. I put the =itertools.product= function together with the /merging/ generators in [[file:ch14.html#merging_genfunc_tbl][Table 14-3]] because they all consume more than one iterable, while the generators in [[file:ch14.html#expanding_genfunc_tbl2][Table 14-5]] all accept at most one input iterable.
+
+
+
+Table 14-5. Rearranging generator functions
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=groupby(it, key=None)=
+
+Yields 2-tuples of the form =(key, group)=, where =key= is the grouping criterion and =group= is a generator yielding the items in the group
+
+(built-in)
+
+=reversed(seq)=
+
+Yields items from =seq= in reverse order, from last to first; =seq= must be a sequence or implement the =__reversed__= special method
+
+=itertools=
+
+=tee(it, n=2)=
+
+Yields a tuple of /n/ generators, each yielding the items of the input iterable independently
+
+[[file:ch14.html#demo_groupby_reversed_genfunc][Example 14-21]] demonstrates the use of =itertools.groupby= and the =reversed= built-in. Note that =itertools.groupby= assumes that the input iterable is sorted by the grouping criterion, or at least that the items are clustered by that criterion---even if not sorted.
+
+
+
+Example 14-21. itertools.groupby
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.groupby('LLLLAAGGG'))  # 
+    [('L', <itertools._grouper object at 0x102227cc0>),
+    ('A', <itertools._grouper object at 0x102227b38>),
+    ('G', <itertools._grouper object at 0x102227b70>)]
+    >>> for char, group in itertools.groupby('LLLLAAAGG'):  # 
+    ...     print(char, '->', list(group))
+    ...
+    L -> ['L', 'L', 'L', 'L']
+    A -> ['A', 'A',]
+    G -> ['G', 'G', 'G']
+    >>> animals = ['duck', 'eagle', 'rat', 'giraffe', 'bear',
+    ...            'bat', 'dolphin', 'shark', 'lion']
+    >>> animals.sort(key=len)  # 
+    >>> animals
+    ['rat', 'bat', 'duck', 'bear', 'lion', 'eagle', 'shark',
+    'giraffe', 'dolphin']
+    >>> for length, group in itertools.groupby(animals, len):  # 
+    ...     print(length, '->', list(group))
+    ...
+    3 -> ['rat', 'bat']
+    4 -> ['duck', 'bear', 'lion']
+    5 -> ['eagle', 'shark']
+    7 -> ['giraffe', 'dolphin']
+    >>> for length, group in itertools.groupby(reversed(animals), len): # 
+    ...     print(length, '->', list(group))
+    ...
+    7 -> ['dolphin', 'giraffe']
+    5 -> ['shark', 'eagle']
+    4 -> ['lion', 'bear', 'duck']
+    3 -> ['bat', 'rat']
+    >>>
+#+END_EXAMPLE
+
+- [[#CO170-1][[[file:callouts/1.png]]]]  :: =groupby= yields tuples of =(key, group_generator)=.
+
+- [[#CO170-2][[[file:callouts/2.png]]]]  :: Handling =groupby= generators involves nested iteration: in this case, the outer =for= loop and the inner =list= constructor.
+
+- [[#CO170-3][[[file:callouts/3.png]]]]  :: To use =groupby=, the input should be sorted; here the words are sorted by length.
+
+- [[#CO170-4][[[file:callouts/4.png]]]]  :: Again, loop over the =key= and =group= pair, to display the =key= and expand the =group= into a =list=.
+
+- [[#CO170-5][[[file:callouts/5.png]]]]  :: Here the =reverse= generator is used to iterate over =animals= from right to left.
+
+The last of the generator functions in this group is =iterator.tee=, which has a unique behavior: it yields multiple generators from a single input iterable, each yielding every item from the input. Those generators can be consumed independently, as shown in [[file:ch14.html#demo_tee_genfunc][Example 14-22]].
+
+
+
+Example 14-22. itertools.tee yields multiple generators, each yielding every item of the input generator
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.tee('ABC'))
+    [<itertools._tee object at 0x10222abc8>, <itertools._tee object at 0x10222ac08>]
+    >>> g1, g2 = itertools.tee('ABC')
+    >>> next(g1)
+    'A'
+    >>> next(g2)
+    'A'
+    >>> next(g2)
+    'B'
+    >>> list(g1)
+    ['B', 'C']
+    >>> list(g2)
+    ['C']
+    >>> list(zip(*itertools.tee('ABC')))
+    [('A', 'A'), ('B', 'B'), ('C', 'C')]
+#+END_EXAMPLE
+
+Note that several examples in this section used combinations of generator functions. This is a great feature of these functions: because they all take generators as arguments and return generators, they can be combined in many different ways.
+
+While on the subject of combining generators, the =yield from= statement, new in Python 3.3, is a tool for doing just that.
+
+** New Syntax in Python 3.3: yield from
+
+
+Nested for loops are the traditional solution when a generator function needs to yield values produced from another generator.
+
+For example, here is a homemade implementation of a chaining generator:^{[[[#ftn.id871163][115]]]}
+
+#+BEGIN_EXAMPLE
+    >>> def chain(*iterables):
+    ...     for it in iterables:
+    ...         for i in it:
+    ...             yield i
+    ...
+    >>> s = 'ABC'
+    >>> t = tuple(range(3))
+    >>> list(chain(s, t))
+    ['A', 'B', 'C', 0, 1, 2]
+#+END_EXAMPLE
+
+The =chain= generator function is delegating to each received iterable in turn. [[http://bit.ly/1wpQv0i][PEP 380 --- Syntax for Delegating to a Subgenerator]] introduced new syntax for doing that, shown in the next console listing:
+
+#+BEGIN_EXAMPLE
+    >>> def chain(*iterables):
+    ...     for i in iterables:
+    ...         yield from i
+    ...
+    >>> list(chain(s, t))
+    ['A', 'B', 'C', 0, 1, 2]
+#+END_EXAMPLE
+
+As you can see, =yield from i= replaces the inner =for= loop completely. The use of =yield from= in this example is correct, and the code reads better, but it seems like mere syntactic sugar. Besides replacing a loop, =yield from= creates a channel connecting the inner generator directly to the client of the outer generator. This channel becomes really important when generators are used as coroutines and not only produce but also consume values from the client code. [[file:ch16.html][Chapter 16]] dives into coroutines, and has several pages explaining why =yield from= is much more than syntactic sugar.
+
+After this first encounter with =yield from=, we'll go back to our review of iterable-savvy functions in the standard library.
+
+** Iterable Reducing Functions
+
+
+The functions in [[file:ch14.html#tbl_iter_reducing][Table 14-6]] all take an iterable and return a single result. They are known as “reducing,” “folding,” or “accumulating” functions. Actually, every one of the built-ins listed here can be implemented with =functools.reduce=, but they exist as built-ins because they address some common use cases more easily. Also, in the case of =all= and =any=, there is an important optimization that can't be done with =reduce=: these functions short-circuit (i.e., they stop consuming the iterator as soon as the result is determined). See the last test with =any= in [[file:ch14.html#all_any_demo][Example 14-23]].
+
+
+
+Table 14-6. Built-in functions that read iterables and return single values
+
+Module
+
+Function
+
+Description
+
+(built-in)
+
+=all(it)=
+
+Returns =True= if all items in =it= are truthy, otherwise =False=; =all([])= returns =True=
+
+(built-in)
+
+=any(it)=
+
+Returns =True= if any item in =it= is truthy, otherwise =False=; =any([])= returns =False=
+
+(built-in)
+
+=max(it, [key=,] [default=])=
+
+Returns the maximum value of the items in =it=;^{[[[#ftn.id436670][a]]]} =key= is an ordering function, as in =sorted=; =default= is returned if the iterable is empty
+
+(built-in)
+
+=min(it, [key=,] [default=])=
+
+Returns the minimum value of the items in =it=.^{[[[#ftn.id579302][b]]]} =key= is an ordering function, as in =sorted=; =default= is returned if the iterable is empty
+
+=functools=
+
+=reduce(func, it, [initial])=
+
+Returns the result of applying =func= to the first pair of items, then to that result and the third item and so on; if given, =initial= forms the initial pair with the first item
+
+(built-in)
+
+=sum(it, start=0)=
+
+The sum of all items in =it=, with the optional =start= value added (use =math.fsum= for better precision when adding floats)
+
+
+^{[[[#id436670][a]]]} May also be called as =max(arg1, arg2, …, [key=?])=, in which case the maximum among the arguments is returned.
+
+
+^{[[[#id579302][b]]]} May also be called as =min(arg1, arg2, …, [key=?])=, in which case the minimum among the arguments is returned.
+
+The operation of =all= and =any= is exemplified in [[file:ch14.html#all_any_demo][Example 14-23]].
+
+
+
+Example 14-23. Results of all and any for some sequences
+
+#+BEGIN_EXAMPLE
+    >>> all([1, 2, 3])
+    True
+    >>> all([1, 0, 3])
+    False
+    >>> all([])
+    True
+    >>> any([1, 2, 3])
+    True
+    >>> any([1, 0, 3])
+    True
+    >>> any([0, 0.0])
+    False
+    >>> any([])
+    False
+    >>> g = (n for n in [0, 0.0, 7, 8])
+    >>> any(g)
+    True
+    >>> next(g)
+    8
+#+END_EXAMPLE
+
+A longer explanation about =functools.reduce= appeared in [[file:ch10.html#multi_hashing][Vector Take #4: Hashing and a Faster ==]].
+
+Another built-in that takes an iterable and returns something else is =sorted=. Unlike =reversed=, which is a generator function, =sorted= builds and returns an actual list. After all, every single item of the input iterable must be read so they can be sorted, and the sorting happens in a =list=, therefore =sorted= just returns that =list= after it's done. I mention =sorted= here because it does consume an arbitrary iterable.
+
+Of course, =sorted= and the reducing functions only work with iterables that eventually stop. Otherwise, they will keep on collecting items and never return a result.
+
+We'll now go back to the =iter()= built-in: it has a little-known feature that we haven't covered yet.
+
+** A Closer Look at the iter Function
+
+
+As we've seen, Python calls =iter(x)= when it needs to iterate over an object =x=.
+
+But =iter= has another trick: it can be called with two arguments to create an iterator from a regular function or any callable object. In this usage, the first argument must be a callable to be invoked repeatedly (with no arguments) to yield values, and the second argument is a sentinel: a marker value which, when returned by the callable, causes the iterator to raise =StopIteration= instead of yielding the sentinel.
+
+The following example shows how to use =iter= to roll a six-sided die until a =1= is rolled:
+
+#+BEGIN_EXAMPLE
+    >>> def d6():
+    ...     return randint(1, 6)
+    ...
+    >>> d6_iter = iter(d6, 1)
+    >>> d6_iter
+    <callable_iterator object at 0x00000000029BE6A0>
+    >>> for roll in d6_iter:
+    ...     print(roll)
+    ...
+    4
+    3
+    6
+    3
+#+END_EXAMPLE
+
+Note that the =iter= function here returns a =callable_iterator=. The =for= loop in the example may run for a very long time, but it will never display =1=, because that is the sentinel value. As usual with iterators, the =d6_iter= object in the example becomes useless once exhausted. To start over, you must rebuild the iterator by invoking =iter(…)= again.
+
+A useful example is found in the [[http://bit.ly/1HGqw70][=iter= built-in function documentation]]. This snippet reads lines from a file until a blank line is found or the end of file is reached:
+
+#+BEGIN_EXAMPLE
+    with open('mydata.txt') as fp:
+        for line in iter(fp.readline, ''):
+            process_line(line)
+#+END_EXAMPLE
+
+To close this chapter, I present a practical example of using generators to handle a large volume of data efficiently.
+
+** Case Study: Generators in a Database Conversion Utility
+
+
+A few years ago I worked at BIREME, a digital library run by PAHO/WHO (Pan-American Health Organization/World Health Organization) in São Paulo, Brazil. Among the bibliographic datasets created by BIREME are LILACS (Latin American and Caribbean Health Sciences index) and SciELO (Scientific Electronic Library Online), two comprehensive databases indexing the scientific and technical literature produced in the region.
+
+Since the late 1980s, the database system used to manage LILACS is CDS/ISIS, a non-relational, document database created by UNESCO and eventually rewritten in C by BIREME to run on GNU/Linux servers. One of my jobs was to research alternatives for a possible migration of LILACS---and eventually the much larger SciELO---to a modern, open source, document database such as CouchDB or MongoDB.
+
+As part of that research, I wrote a Python script, /isis2json.py/, that reads a CDS/ISIS file and writes a JSON file suitable for importing to CouchDB or MongoDB. Initially, the script read files in the ISO-2709 format exported by CDS/ISIS. The reading and writing had to be done incrementally because the full datasets were much bigger than main memory. That was easy enough: each iteration of the main =for= loop read one record from the /.iso/ file, massaged it, and wrote it to the /.json/ output.
+
+However, for operational reasons, it was deemed necessary that /isis2json.py/ supported another CDS/ISIS data format: the binary /.mst/ files used in production at BIREME---to avoid the costly export to ISO-2709.
+
+Now I had a problem: the libraries used to read ISO-2709 and /.mst/ files had very different APIs. And the JSON writing loop was already complicated because the script accepted a variety of command-line options to restructure each output record. Reading data using two different APIs in the same =for= loop where the JSON was produced would be unwieldy.
+
+The solution was to isolate the reading logic into a pair of generator functions: one for each supported input format. In the end, the /isis2json.py/ script was split into four functions. You can see the main Python 2 script in [[file:apa.html#support_isis2json][Example A-5]], but the full source code with dependencies is in [[http://bit.ly/1HGqzzT][/fluentpython/isis2json/]] on GitHub.
+
+Here is a high-level overview of how the script is structured:
+
+-  =main=  :: The =main= function uses =argparse= to read command-line options that configure the structure of the output records. Based on the input filename extension, a suitable generator function is selected to read the data and yield the records, one by one.
+-  =iter_iso_records=  :: This generator function reads /.iso/ files (assumed to be in the ISO-2709 format). It takes two arguments: the filename and =isis_json_type=, one of the options related to the record structure. Each iteration of its =for= loop reads one record, creates an empty =dict=, populates it with field data, and yields the =dict=.
+-  =iter_mst_records=  :: This other generator functions reads /.mst/ files.^{[[[#ftn.id502341][116]]]} If you look at the source code for /isis2json.py/, you'll see that it's not as simple as =iter_iso_records=, but its interface and overall structure is the same: it takes a filename and an =isis_json_type= argument and enters a =for= loop, which builds and yields one =dict= per iteration, representing a single record.
+-  =write_json=  :: This function performs the actual writing of the JSON records, one at a time. It takes numerous arguments, but the first one---=input_gen=---is a reference to a generator function: either =iter_iso_records= or =iter_mst_records=. The main =for= loop in =write_json= iterates over the dictionaries yielded by the selected =input_gen= generator, massages it in several ways as determined by the command-line options, and appends the JSON record to the output file.
+
+By leveraging generator functions, I was able to decouple the reading logic from the writing logic. Of course, the simplest way to decouple them would be to read all records to memory, then write them to disk. But that was not a viable option because of the size of the datasets. Using generators, the reading and writing is interleaved, so the script can process files of any size.
+
+Now if /isis2json.py/ needs to support an additional input format---say, MARCXML, a DTD used by the U.S. Library of Congress to represent ISO-2709 data---it will be easy to add a third generator function to implement the reading logic, without changing anything in the complicated =write_json= function.
+
+This is not rocket science, but it's a real example where generators provided a flexible solution to processing databases as a stream of records, keeping memory usage low regardless of the amount of data. Anyone who manages large datasets finds many opportunities for using generators in practice.
+
+The next section addresses an aspect of generators that we'll actually skip for now. Read on to understand why.
+
+** Generators as Coroutines
+
+
+About five years after generator functions with the =yield= keyword were introduced in Python 2.2, [[https://www.python.org/dev/peps/pep-0342/][PEP 342 --- Coroutines via Enhanced Generators]] was implemented in Python 2.5. This proposal added extra methods and functionality to generator objects, most notably the =.send()= method.
+
+Like =.__next__()=, =.send()= causes the generator to advance to the next =yield=, but it also allows the client using the generator to send data into it: whatever argument is passed to =.send()= becomes the value of the corresponding =yield= expression inside the generator function body. In other words, =.send()= allows two-way data exchange between the client code and the generator---in contrast with =.__next__()=, which only lets the client receive data from the generator.
+
+This is such a major “enhancement” that it actually changes the nature of generators: when used in this way, they become /coroutines/. David Beazley---probably the most prolific writer and speaker about coroutines in the Python community---warned in a famous [[http://www.dabeaz.com/coroutines/][PyCon US 2009 tutorial]]:
+
+#+BEGIN_QUOTE
+
+  - Generators produce data for iteration
+  - Coroutines are consumers of data
+  - To keep your brain from exploding, you don't mix the two concepts together
+  - Coroutines are not related to iteration
+  - Note: There is a use of having yield produce a value in a coroutine, but it's not tied to iteration.^{[[[#ftn.id606357][117]]]}
+
+  --- David Beazley /“A Curious Course on Coroutines and Concurrency”/
+
+#+END_QUOTE
+
+I will follow Dave's advice and close this chapter---which is really about iteration techniques---without touching =send= and the other features that make generators usable as coroutines. Coroutines will be covered in [[file:ch16.html][Chapter 16]].
+
+** Chapter Summary
+
+
+Iteration is so deeply embedded in the language that I like to say that Python groks iterators.^{[[[#ftn.id900188][118]]]} The integration of the Iterator pattern in the semantics of Python is a prime example of how design patterns are not equally applicable in all programming languages. In Python, a classic iterator implemented “by hand” as in [[file:ch14.html#ex_sentence1][Example 14-4]] has no practical use, except as a didactic example.
+
+In this chapter, we built a few versions of a class to iterate over individual words in text files that may be very long. Thanks to the use of generators, the successive refactorings of the =Sentence= class become shorter and easier to read---when you know how they work.
+
+We then coded a generator of arithmetic progressions and showed how to leverage the =itertools= module to make it simpler. An overview of 24 general-purpose generator functions in the standard library followed.
+
+Following that, we looked at the =iter= built-in function: first, to see how it returns an iterator when called as =iter(o)=, and then to study how it builds an iterator from any function when called as =iter(func, sentinel)=.
+
+For practical context, I described the implementation of a database conversion utility using generator functions to decouple the reading to the writing logic, enabling efficient handling of large datasets and making it easy to support more than one data input format.
+
+Also mentioned in this chapter were the =yield from= syntax, new in Python 3.3, and coroutines. Both topics were just introduced here; they get more coverage later in the book.
+
+** Further Reading
+
+
+A detailed technical explanation of generators appears in The Python Language Reference in [[http://bit.ly/1MM5Xb5][6.2.9. Yield expressions]]. The PEP where generator functions were defined is [[https://www.python.org/dev/peps/pep-0255/][PEP 255 --- Simple Generators]].
+
+The [[https://docs.python.org/3/library/itertools.html][=itertools= module documentation]] is excellent because of all the examples included. Although the functions in that module are implemented in C, the documentation shows how many of them would be written in Python, often by leveraging other functions in the module. The usage examples are also great: for instance, there is a snippet showing how to use the =accumulate= function to amortize a loan with interest, given a list of payments over time. There is also an [[http://bit.ly/1MM5YvA][Itertools Recipes]] section with additional high-performance functions that use the =itertools= functions as building blocks.
+
+Chapter 4, “Iterators and Generators,” of /Python Cookbook, 3E/ (O'Reilly), by David Beazley and Brian K. Jones, has 16 recipes covering this subject from many different angles, always focusing on practical applications.
+
+The =yield from= syntax is explained with examples in What's New in Python 3.3 (see [[http://bit.ly/1MM6d9R][PEP 380: Syntax for Delegating to a Subgenerator]]). We'll also cover it in detail in [[file:ch16.html#coro_yield_from_sec][Using yield from]] and [[file:ch16.html#yield_from_meaning_sec][The Meaning of yield from]] in [[file:ch16.html][Chapter 16]].
+
+If you are interested in document databases and would like to learn more about the context of [[file:ch14.html#generator_case_study][Case Study: Generators in a Database Conversion Utility]], the Code4Lib Journal---which covers the intersection between libraries and technology---published my paper [[http://journal.code4lib.org/articles/4893][“From ISIS to CouchDB: Databases and Data Models for Bibliographic Records”]]. One section of the paper describes the /isis2json.py/ script. The rest of it explains why and how the semistructured data model implemented by document databases like CouchDB and MongoDB are more suitable for cooperative bibliographic data collection than the relational model.
+
+Soapbox
+
+*Generator Function Syntax: More Sugar Would Be Nice*
+
+#+BEGIN_QUOTE
+  Designers need to ensure that controls and displays for different purposes are significantly different from one another.
+
+  --- Donald Norman /The Design of Everyday Things/
+
+#+END_QUOTE
+
+Source code plays the role of “controls and displays” in programming languages. I think Python is exceptionally well designed; its source code is often as readable as pseudocode. But nothing is perfect. Guido van Rossum should have followed Donald Norman's advice (previously quoted) and introduced another keyword for defining generator expressions, instead of reusing =def=. The “BDFL Pronouncements” section of [[https://www.python.org/dev/peps/pep-0255/][PEP 255 --- Simple Generators]] actually argues:
+
+#+BEGIN_QUOTE
+  A “yield” statement buried in the body is not enough warning that the semantics are so different.
+#+END_QUOTE
+
+But Guido hates introducing new keywords and he did not find that argument convincing, so we are stuck with =def=.
+
+Reusing the function syntax for generators has other bad consequences. In the paper and experimental work “Python, the Full Monty: A Tested Semantics for the Python Programming Language,” Politz^{[[[#ftn.id776292][119]]]} et al. show this trivial example of a generator function (section 4.1 of the paper):
+
+#+BEGIN_EXAMPLE
+    def f(): x=0
+        while True:
+            x += 1
+            yield x
+#+END_EXAMPLE
+
+The authors then make the point that we can't abstract the process of yielding with a function call ([[file:ch14.html#ex_yield_delegate_fail][Example 14-24]]).
+
+
+
+Example 14-24. “[This] seems to perform a simple abstraction over the process of yielding” (Politz et al.)
+
+#+BEGIN_EXAMPLE
+    def f():
+        def do_yield(n):
+            yield n
+        x = 0
+        while True:
+            x += 1
+            do_yield(x)
+#+END_EXAMPLE
+
+If we call =f()= in [[file:ch14.html#ex_yield_delegate_fail][Example 14-24]], we get an infinite loop, and not a generator, because the =yield= keyword only makes the immediately enclosing function a generator function. Although generator functions look like functions, we cannot delegate another generator function with a simple function call. As a point of comparison, the Lua language does not impose this limitation. A Lua coroutine can call other functions and any of them can yield to the original caller.
+
+The new =yield from= syntax was introduced to allow a Python generator or coroutine to delegate work to another, without requiring the workaround of an inner =for= loop. [[file:ch14.html#ex_yield_delegate_fail][Example 14-24]] can be “fixed” by prefixing the function call with =yield from=, as in [[file:ch14.html#ex_yield_delegate_fail2][Example 14-25]].
+
+
+
+Example 14-25. This actually performs a simple abstraction over the process of yielding
+
+#+BEGIN_EXAMPLE
+    def f():
+        def do_yield(n):
+            yield n
+        x = 0
+        while True:
+            x += 1
+            yield from do_yield(x)
+#+END_EXAMPLE
+
+Reusing =def= for declaring generators was a usability mistake, and the problem was compounded in Python 2.5 with coroutines, which are also coded as functions with =yield=. In the case of coroutines, the =yield= just happens to appear---usually---on the righthand side of an assignment, because it receives the argument of the =.send()= call from the client. As David Beazley says:
+
+#+BEGIN_QUOTE
+  Despite some similarities, generators and coroutines are basically two different concepts.^{[[[#ftn.id446763][120]]]}
+#+END_QUOTE
+
+I believe coroutines also deserved their own keyword. As we'll see later, coroutines are often used with special decorators, which do set them apart from other functions. But generator functions are not decorated as frequently, so we have to scan their bodies for =yield= to realize they are not functions at all, but a completely different beast.
+
+It can be argued that, because those features were made to work with little additional syntax, extra syntax would be merely “syntactic sugar.” I happen to like syntactic sugar when it makes features that are different look different. The lack of syntactic sugar is the main reason why Lisp code is hard to read: every language construct in Lisp looks like a function call.
+
+*Semantics of Generator Versus Iterator*
+
+There are at least three ways of thinking about the relationship between iterators and generators.
+
+The first is the interface viewpoint. The Python iterator protocol defines two methods: =__next__= and =__iter__=. Generator objects implement both, so from this perspective, every generator is an iterator. By this definition, objects created by the =enumerate()= built-in are iterators:
+
+#+BEGIN_EXAMPLE
+    >>> from collections import abc
+    >>> e = enumerate('ABC')
+    >>> isinstance(e, abc.Iterator)
+    True
+#+END_EXAMPLE
+
+The second is the implementation viewpoint. From this angle, a generator is a Python language construct that can be coded in two ways: as a function with the =yield= keyword or as a generator expression. The generator objects resulting from calling a generator function or evaluating a generator expression are instances of an internal [[http://bit.ly/1MM6Sbm][=GeneratorType=]]. From this perspective, every generator is also an iterator, because =GeneratorType= instances implement the iterator interface. But you can write an iterator that is not a generator---by implementing the classic Iterator pattern, as we saw in [[file:ch14.html#ex_sentence1][Example 14-4]], or by coding an extension in C. The =enumerate= objects are not generators from this perspective:
+
+#+BEGIN_EXAMPLE
+    >>> import types
+    >>> e = enumerate('ABC')
+    >>> isinstance(e, types.GeneratorType)
+    False
+#+END_EXAMPLE
+
+This happens because [[https://docs.python.org/3/library/types.html#types.GeneratorType][=types.GeneratorType=]] is defined as “The type of generator-iterator objects, produced by calling a generator function.”
+
+The third is the conceptual viewpoint. In the classic Iterator design pattern---as defined in the GoF book---the iterator traverses a collection and yields items from it. The iterator may be quite complex; for example, it may navigate through a tree-like data structure. But, however much logic is in a classic iterator, it always reads values from an existing data source, and when you call =next(it)=, the iterator is not expected to change the item it gets from the source; it's supposed to just yield it as is.
+
+In contrast, a generator may produce values without necessarily traversing a collection, like =range= does. And even if attached to a collection, generators are not limited to yielding just the items in it, but may yield some other values derived from them. A clear example of this is the =enumerate= function. By the original definition of the design pattern, the generator returned by =enumerate= is not an iterator because it creates the tuples it yields.
+
+At this conceptual level, the implementation technique is irrelevant. You can write a generator without using a Python generator object. [[file:ch14.html#ex_fibo][Example 14-26]] is a Fibonacci generator I wrote just to make this point.
+
+
+
+Example 14-26. fibo_by_hand.py: Fibonacci generator without GeneratorType instances
+
+#+BEGIN_EXAMPLE
+    class Fibonacci:
+
+        def __iter__(self):
+            return FibonacciGenerator()
+
+
+    class FibonacciGenerator:
+
+        def __init__(self):
+            self.a = 0
+            self.b = 1
+
+        def __next__(self):
+            result = self.a
+            self.a, self.b = self.b, self.a + self.b
+            return result
+
+        def __iter__(self):
+            return self
+#+END_EXAMPLE
+
+[[file:ch14.html#ex_fibo][Example 14-26]] works but is just a silly example. Here is the Pythonic Fibonacci generator:
+
+#+BEGIN_EXAMPLE
+    def fibonacci():
+        a, b = 0, 1
+        while True:
+            yield a
+            a, b = b, a + b
+#+END_EXAMPLE
+
+And of course, you can always use the generator language construct to perform the basic duties of an iterator: traversing a collection and yielding items from it.
+
+In reality, Python programmers are not strict about this distinction: generators are also called iterators, even in the official docs. The canonical definition of an iterator in the [[http://docs.python.org/dev/glossary.html#term-iterator][Python Glossary]] is so general it encompasses both iterators and generators:
+
+#+BEGIN_QUOTE
+  Iterator: An object representing a stream of data. [...]
+#+END_QUOTE
+
+The full definition of [[https://docs.python.org/3/glossary.html#term-iterator][/iterator/]] in the Python Glossary is worth reading. On the other hand, the definition of [[https://docs.python.org/3/glossary.html#term-generator][/generator/]] there treats /iterator/ and /generator/ as synonyms, and uses the word “generator” to refer both to the generator function and the generator object it builds. So, in the Python community lingo, iterator and generator are fairly close synonyms.
+
+*The Minimalistic Iterator Interface in Python*
+
+In the “Implementation” section of the Iterator pattern,^{[[[#ftn.id595103][121]]]} the /Gang of Four/ wrote:
+
+#+BEGIN_QUOTE
+  The minimal interface to Iterator consists of the operations First, Next, IsDone, and CurrentItem.
+#+END_QUOTE
+
+However, that very sentence has a footnote which reads:
+
+#+BEGIN_QUOTE
+  We can make this interface even smaller by merging Next, IsDone, and CurrentItem into a single operation that advances to the next object and returns it. If the traversal is finished, then this operation returns a special value (0, for instance) that marks the end of the iteration.
+#+END_QUOTE
+
+This is close to what we have in Python: the single method =__next__= does the job. But instead of using a sentinel, which could be overlooked by mistake, the =StopIteration= exception signals the end of the iteration. Simple and correct: that's the Python way.
+
+
+
+--------------
+
+
+^{[[[#id1075798][104]]]} From [[http://www.paulgraham.com/icad.html][“Revenge of the Nerds”]], a blog post.
+
+
+^{[[[#id1043880][105]]]} Python 2.2 users could use =yield= with the directive =from __future__ import generators=; =yield= became available by default in Python 2.3.
+
+
+^{[[[#id1041221][106]]]} We first used =reprlib= in [[file:ch10.html#vector_take1_sec][Vector Take #1: Vector2d Compatible]].
+
+
+^{[[[#id1058770][107]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 259.
+
+
+^{[[[#id1048185][108]]]} When reviewing this code, Alex Martelli suggested the body of this method could simply be =return iter(self.words)=. He is correct, of course: the result of calling =__iter__= would also be an iterator, as it should be. However, I used a =for= loop with =yield= here to introduce the syntax of a generator function, which will be covered in detail in the next section.
+
+
+^{[[[#id505989][109]]]} Sometimes I add a =gen= prefix or suffix when naming generator functions, but this is not a common practice. And you can't do that if you're implementing an iterable, of course: the necessary special method must be named =__iter__=.
+
+
+^{[[[#id506010][110]]]} Thanks to David Kwast for suggesting this example.
+
+
+^{[[[#id1071195][111]]]} Prior to Python 3.3, it was an error to provide a value with the =return= statement in a generator function. Now that is legal, but the =return= still causes a =StopIteration= exception to be raised. The caller can retrieve the return value from the exception object. However, this is only relevant when using a generator function as a coroutine, as we'll see in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]].
+
+
+^{[[[#id505722][112]]]} In Python 2, there was a =coerce()= built-in function but it's gone in Python 3, deemed unnecessary because the numeric coercion rules are implicit in the arithmetic operator methods. So the best way I could think of to coerce the initial value to be of the same type as the rest of the series was to perform the addition and use its type to convert the result. I asked about this in the Python-list and got an excellent [[http://bit.ly/1JIbIYO][response from Steven D'Aprano]].
+
+
+^{[[[#id969978][113]]]} The /14-it-generator// directory in the [[http://bit.ly/1JItSti][/Fluent Python/ code repository]] includes doctests and a script, /aritprog_runner.py/, which runs the tests against all variations of the /aritprog*.py/ scripts.
+
+
+^{[[[#id1007011][114]]]} Here the term “mapping” is unrelated to dictionaries, but has to do with the =map= built-in.
+
+
+^{[[[#id871163][115]]]} The =itertools.chain= from the standard library is written in C.
+
+
+^{[[[#id502341][116]]]} The library used to read the complex /.mst/ binary is actually written in Java, so this functionality is only available when /isis2json.py/ is executed with the Jython interpreter, version 2.5 or newer. For further details, see the [[http://bit.ly/1MM5aXD][/README.rst/]] file in the repository. The dependencies are imported inside the generator functions that need them, so the script can run even if only one of the external libraries is available.
+
+
+^{[[[#id606357][117]]]} Slide 33, “Keeping It Straight,” in [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id900188][118]]]} According to the [[http://catb.org/~esr/jargon/html/G/grok.html][Jargon file]], to /grok/ is not merely to learn something, but to absorb it so “it becomes part of you, part of your identity.”
+
+
+^{[[[#id776292][119]]]} Joe Gibbs Politz, Alejandro Martinez, Matthew Milano, Sumner Warren, Daniel Patterson, Junsong Li, Anand Chitipothu, and Shriram Krishnamurthi, “Python: The Full Monty,” SIGPLAN Not. 48, 10 (October 2013), 217-232.
+
+
+^{[[[#id446763][120]]]} Slide 31, [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
+ception to be raised. The caller can retrieve the return value from the exception object. However, this is only relevant when using a generator function as a coroutine, as we'll see in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]].
+
+
+^{[[[#id505722][112]]]} In Python 2, there was a =coerce()= built-in function but it's gone in Python 3, deemed unnecessary because the numeric coercion rules are implicit in the arithmetic operator methods. So the best way I could think of to coerce the initial value to be of the same type as the rest of the series was to perform the addition and use its type to convert the result. I asked about this in the Python-list and got an excellent [[http://bit.ly/1JIbIYO][response from Steven D'Aprano]].
+
+
+^{[[[#id969978][113]]]} The /14-it-generator// directory in the [[http://bit.ly/1JItSti][/Fluent Python/ code repository]] includes doctests and a script, /aritprog_runner.py/, which runs the tests against all variations of the /aritprog*.py/ scripts.
+
+
+^{[[[#id1007011][114]]]} Here the term “mapping” is unrelated to dictionaries, but has to do with the =map= built-in.
+
+
+^{[[[#id871163][115]]]} The =itertools.chain= from the standard library is written in C.
+
+
+^{[[[#id502341][116]]]} The library used to read the complex /.mst/ binary is actually written in Java, so this functionality is only available when /isis2json.py/ is executed with the Jython interpreter, version 2.5 or newer. For further details, see the [[http://bit.ly/1MM5aXD][/README.rst/]] file in the repository. The dependencies are imported inside the generator functions that need them, so the script can run even if only one of the external libraries is available.
+
+
+^{[[[#id606357][117]]]} Slide 33, “Keeping It Straight,” in [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id900188][118]]]} According to the [[http://catb.org/~esr/jargon/html/G/grok.html][Jargon file]], to /grok/ is not merely to learn something, but to absorb it so “it becomes part of you, part of your identity.”
+
+
+^{[[[#id776292][119]]]} Joe Gibbs Politz, Alejandro Martinez, Matthew Milano, Sumner Warren, Daniel Patterson, Junsong Li, Anand Chitipothu, and Shriram Krishnamurthi, “Python: The Full Monty,” SIGPLAN Not. 48, 10 (October 2013), 217-232.
+
+
+^{[[[#id446763][120]]]} Slide 31, [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
+utines and Concurrency”]].
+
+
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
+ Merging generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.chain('ABC', range(2)))  # 
+    ['A', 'B', 'C', 0, 1]
+    >>> list(itertools.chain(enumerate('ABC')))  # 
+    [(0, 'A'), (1, 'B'), (2, 'C')]
+    >>> list(itertools.chain.from_iterable(enumerate('ABC')))  # 
+    [0, 'A', 1, 'B', 2, 'C']
+    >>> list(zip('ABC', range(5)))  # 
+    [('A', 0), ('B', 1), ('C', 2)]
+    >>> list(zip('ABC', range(5), [10, 20, 30, 40]))  # 
+    [('A', 0, 10), ('B', 1, 20), ('C', 2, 30)]
+    >>> list(itertools.zip_longest('ABC', range(5)))  # 
+    [('A', 0), ('B', 1), ('C', 2), (None, 3), (None, 4)]
+    >>> list(itertools.zip_longest('ABC', range(5), fillvalue='?'))  # 
+    [('A', 0), ('B', 1), ('C', 2), ('?', 3), ('?', 4)]
+#+END_EXAMPLE
+
+- [[#CO166-1][[[file:callouts/1.png]]]]  :: =chain= is usually called with two or more iterables.
+
+- [[#CO166-2][[[file:callouts/2.png]]]]  :: =chain= does nothing useful when called with a single iterable.
+
+- [[#CO166-3][[[file:callouts/3.png]]]]  :: But =chain.from_iterable= takes each item from the iterable, and chains them in sequence, as long as each item is itself iterable.
+
+- [[#CO166-4][[[file:callouts/4.png]]]]  :: =zip= is commonly used to merge two iterables into a series of two-tuples.
+
+- [[#CO166-5][[[file:callouts/5.png]]]]  :: Any number of iterables can be consumed by =zip= in parallel, but the generator stops as soon as the first iterable ends.
+
+- [[#CO166-6][[[file:callouts/6.png]]]]  :: =itertools.zip_longest= works like =zip=, except it consumes all input iterables to the end, padding output tuples with =None= as needed.
+
+- [[#CO166-7][[[file:callouts/7.png]]]]  :: The =fillvalue= keyword argument specifies a custom padding value.
+
+The =itertools.product= generator is a lazy way of computing Cartesian products, which we built using list comprehensions with more than one =for= clause in [[file:ch02.html#cartesian_product_sec][Cartesian Products]]. Generator expressions with multiple =for= clauses can also be used to produce Cartesian products lazily. [[file:ch14.html#demo_product_genfunc][Example 14-18]] demonstrates =itertools.product=.
+
+
+
+Example 14-18. itertools.product generator function examples
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.product('ABC', range(2)))  # 
+    [('A', 0), ('A', 1), ('B', 0), ('B', 1), ('C', 0), ('C', 1)]
+    >>> suits = 'spades hearts diamonds clubs'.split()
+    >>> list(itertools.product('AK', suits))  # 
+    [('A', 'spades'), ('A', 'hearts'), ('A', 'diamonds'), ('A', 'clubs'),
+    ('K', 'spades'), ('K', 'hearts'), ('K', 'diamonds'), ('K', 'clubs')]
+    >>> list(itertools.product('ABC'))  # 
+    [('A',), ('B',), ('C',)]
+    >>> list(itertools.product('ABC', repeat=2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'B'),
+    ('B', 'C'), ('C', 'A'), ('C', 'B'), ('C', 'C')]
+    >>> list(itertools.product(range(2), repeat=3))
+    [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0),
+    (1, 0, 1), (1, 1, 0), (1, 1, 1)]
+    >>> rows = itertools.product('AB', range(2), repeat=2)
+    >>> for row in rows: print(row)
+    ...
+    ('A', 0, 'A', 0)
+    ('A', 0, 'A', 1)
+    ('A', 0, 'B', 0)
+    ('A', 0, 'B', 1)
+    ('A', 1, 'A', 0)
+    ('A', 1, 'A', 1)
+    ('A', 1, 'B', 0)
+    ('A', 1, 'B', 1)
+    ('B', 0, 'A', 0)
+    ('B', 0, 'A', 1)
+    ('B', 0, 'B', 0)
+    ('B', 0, 'B', 1)
+    ('B', 1, 'A', 0)
+    ('B', 1, 'A', 1)
+    ('B', 1, 'B', 0)
+    ('B', 1, 'B', 1)
+#+END_EXAMPLE
+
+- [[#CO167-1][[[file:callouts/1.png]]]]  :: The Cartesian product of a =str= with three characters and a =range= with two integers yields six tuples (because =3 * 2= is =6=).
+
+- [[#CO167-2][[[file:callouts/2.png]]]]  :: The product of two card ranks (='AK'=), and four suits is a series of eight tuples.
+
+- [[#CO167-3][[[file:callouts/3.png]]]]  :: Given a single iterable, =product= yields a series of one-tuples, not very useful.
+
+- [[#CO167-4][[[file:callouts/4.png]]]]  :: The =repeat=N= keyword argument tells product to consume each input iterable =N= times.
+
+Some generator functions expand the input by yielding more than one value per input item. They are listed in [[file:ch14.html#expanding_genfunc_tbl][Table 14-4]].
+
+
+
+Table 14-4. Generator functions that expand each input item into multiple output items
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=combinations(it, out_len)=
+
+Yield combinations of =out_len= items from the items yielded by =it=
+
+=itertools=
+
+=combinations_with_replacement(it, out_len)=
+
+Yield combinations of =out_len= items from the items yielded by =it=, including combinations with repeated items
+
+=itertools=
+
+=count(start=0, step=1)=
+
+Yields numbers starting at =start=, incremented by =step=, indefinitely
+
+=itertools=
+
+=cycle(it)=
+
+Yields items from =it= storing a copy of each, then yields the entire sequence repeatedly, indefinitely
+
+=itertools=
+
+=permutations(it, out_len=None)=
+
+Yield permutations of =out_len= items from the items yielded by =it=; by default, =out_len= is =len(list(it))=
+
+=itertools=
+
+=repeat(item, [times])=
+
+Yield the given item repeadedly, indefinetly unless a number of =times= is given
+
+The =count= and =repeat= functions from =itertools= return generators that conjure items out of nothing: neither of them takes an iterable as input. We saw =itertools.count= in [[file:ch14.html#ap_itertools_sec][Arithmetic Progression with itertools]]. The =cycle= generator makes a backup of the input iterable and yields its items repeatedly. [[file:ch14.html#demo_count_repeat_genfunc][Example 14-19]] illustrates the use of =count=, =repeat=, and =cycle=.
+
+
+
+Example 14-19. count, cycle, and repeat
+
+#+BEGIN_EXAMPLE
+    >>> ct = itertools.count()  # 
+    >>> next(ct)  # 
+    0
+    >>> next(ct), next(ct), next(ct)  # 
+    (1, 2, 3)
+    >>> list(itertools.islice(itertools.count(1, .3), 3))  # 
+    [1, 1.3, 1.6]
+    >>> cy = itertools.cycle('ABC')  # 
+    >>> next(cy)
+    'A'
+    >>> list(itertools.islice(cy, 7))  # 
+    ['B', 'C', 'A', 'B', 'C', 'A', 'B']
+    >>> rp = itertools.repeat(7)  # 
+    >>> next(rp), next(rp)
+    (7, 7)
+    >>> list(itertools.repeat(8, 4))  # 
+    [8, 8, 8, 8]
+    >>> list(map(operator.mul, range(11), itertools.repeat(5)))  # 
+    [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+#+END_EXAMPLE
+
+- [[#CO168-1][[[file:callouts/1.png]]]]  :: Build a =count= generator =ct=.
+
+- [[#CO168-2][[[file:callouts/2.png]]]]  :: Retrieve the first item from =ct=.
+
+- [[#CO168-3][[[file:callouts/3.png]]]]  :: I can't build a =list= from =ct=, because =ct= never stops, so I fetch the next three items.
+
+- [[#CO168-4][[[file:callouts/4.png]]]]  :: I can build a =list= from a =count= generator if it is limited by =islice= or =takewhile=.
+
+- [[#CO168-5][[[file:callouts/5.png]]]]  :: Build a =cycle= generator from ='ABC'= and fetch its first item, ='A'=.
+
+- [[#CO168-6][[[file:callouts/6.png]]]]  :: A =list= can only be built if limited by =islice=; the next seven items are retrieved here.
+
+- [[#CO168-7][[[file:callouts/7.png]]]]  :: Build a =repeat= generator that will yield the number =7= forever.
+
+- [[#CO168-8][[[file:callouts/8.png]]]]  :: A =repeat= generator can be limited by passing the =times= argument: here the number =8= will be produced =4= times.
+
+- [[#CO168-9][[[file:callouts/9.png]]]]  :: A common use of =repeat=: providing a fixed argument in =map=; here it provides the =5= multiplier.
+
+The =combinations=, =combinations_with_replacement=, and =permutations= generator functions---together with =product=---are called the /combinatoric generators/ in the [[http://bit.ly/py-itertools][=itertools= documentation page]]. There is a close relationship between =itertools.product= and the remaining /combinatoric/ functions as well, as [[file:ch14.html#demo_conbinatoric_genfunc][Example 14-20]] shows.
+
+
+
+Example 14-20. Combinatoric generator functions yield multiple values per input item
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.combinations('ABC', 2))  # 
+    [('A', 'B'), ('A', 'C'), ('B', 'C')]
+    >>> list(itertools.combinations_with_replacement('ABC', 2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')]
+    >>> list(itertools.permutations('ABC', 2))  # 
+    [('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'C'), ('C', 'A'), ('C', 'B')]
+    >>> list(itertools.product('ABC', repeat=2))  # 
+    [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'B'), ('B', 'C'),
+    ('C', 'A'), ('C', 'B'), ('C', 'C')]
+#+END_EXAMPLE
+
+- [[#CO169-1][[[file:callouts/1.png]]]]  :: All combinations of =len()==2= from the items in ='ABC'=; item ordering in the generated tuples is irrelevant (they could be sets).
+
+- [[#CO169-2][[[file:callouts/2.png]]]]  :: All combinations of =len()==2= from the items in ='ABC'=, including combinations with repeated items.
+
+- [[#CO169-3][[[file:callouts/3.png]]]]  :: All permutations of =len()==2= from the items in ='ABC'=; item ordering in the generated tuples is relevant.
+
+- [[#CO169-4][[[file:callouts/4.png]]]]  :: Cartesian product from ='ABC'= and ='ABC'= (that's the effect of =repeat=2=).
+
+The last group of generator functions we'll cover in this section are designed to yield all items in the input iterables, but rearranged in some way. Here are two functions that return multiple generators: =itertools.groupby= and =itertools.tee=. The other generator function in this group, the =reversed= built-in, is the only one covered in this section that does not accept any iterable as input, but only sequences. This makes sense: because =reversed= will yield the items from last to first, it only works with a sequence with a known length. But it avoids the cost of making a reversed copy of the sequence by yielding each item as needed. I put the =itertools.product= function together with the /merging/ generators in [[file:ch14.html#merging_genfunc_tbl][Table 14-3]] because they all consume more than one iterable, while the generators in [[file:ch14.html#expanding_genfunc_tbl2][Table 14-5]] all accept at most one input iterable.
+
+
+
+Table 14-5. Rearranging generator functions
+
+Module
+
+Function
+
+Description
+
+=itertools=
+
+=groupby(it, key=None)=
+
+Yields 2-tuples of the form =(key, group)=, where =key= is the grouping criterion and =group= is a generator yielding the items in the group
+
+(built-in)
+
+=reversed(seq)=
+
+Yields items from =seq= in reverse order, from last to first; =seq= must be a sequence or implement the =__reversed__= special method
+
+=itertools=
+
+=tee(it, n=2)=
+
+Yields a tuple of /n/ generators, each yielding the items of the input iterable independently
+
+[[file:ch14.html#demo_groupby_reversed_genfunc][Example 14-21]] demonstrates the use of =itertools.groupby= and the =reversed= built-in. Note that =itertools.groupby= assumes that the input iterable is sorted by the grouping criterion, or at least that the items are clustered by that criterion---even if not sorted.
+
+
+
+Example 14-21. itertools.groupby
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.groupby('LLLLAAGGG'))  # 
+    [('L', <itertools._grouper object at 0x102227cc0>),
+    ('A', <itertools._grouper object at 0x102227b38>),
+    ('G', <itertools._grouper object at 0x102227b70>)]
+    >>> for char, group in itertools.groupby('LLLLAAAGG'):  # 
+    ...     print(char, '->', list(group))
+    ...
+    L -> ['L', 'L', 'L', 'L']
+    A -> ['A', 'A',]
+    G -> ['G', 'G', 'G']
+    >>> animals = ['duck', 'eagle', 'rat', 'giraffe', 'bear',
+    ...            'bat', 'dolphin', 'shark', 'lion']
+    >>> animals.sort(key=len)  # 
+    >>> animals
+    ['rat', 'bat', 'duck', 'bear', 'lion', 'eagle', 'shark',
+    'giraffe', 'dolphin']
+    >>> for length, group in itertools.groupby(animals, len):  # 
+    ...     print(length, '->', list(group))
+    ...
+    3 -> ['rat', 'bat']
+    4 -> ['duck', 'bear', 'lion']
+    5 -> ['eagle', 'shark']
+    7 -> ['giraffe', 'dolphin']
+    >>> for length, group in itertools.groupby(reversed(animals), len): # 
+    ...     print(length, '->', list(group))
+    ...
+    7 -> ['dolphin', 'giraffe']
+    5 -> ['shark', 'eagle']
+    4 -> ['lion', 'bear', 'duck']
+    3 -> ['bat', 'rat']
+    >>>
+#+END_EXAMPLE
+
+- [[#CO170-1][[[file:callouts/1.png]]]]  :: =groupby= yields tuples of =(key, group_generator)=.
+
+- [[#CO170-2][[[file:callouts/2.png]]]]  :: Handling =groupby= generators involves nested iteration: in this case, the outer =for= loop and the inner =list= constructor.
+
+- [[#CO170-3][[[file:callouts/3.png]]]]  :: To use =groupby=, the input should be sorted; here the words are sorted by length.
+
+- [[#CO170-4][[[file:callouts/4.png]]]]  :: Again, loop over the =key= and =group= pair, to display the =key= and expand the =group= into a =list=.
+
+- [[#CO170-5][[[file:callouts/5.png]]]]  :: Here the =reverse= generator is used to iterate over =animals= from right to left.
+
+The last of the generator functions in this group is =iterator.tee=, which has a unique behavior: it yields multiple generators from a single input iterable, each yielding every item from the input. Those generators can be consumed independently, as shown in [[file:ch14.html#demo_tee_genfunc][Example 14-22]].
+
+
+
+Example 14-22. itertools.tee yields multiple generators, each yielding every item of the input generator
+
+#+BEGIN_EXAMPLE
+    >>> list(itertools.tee('ABC'))
+    [<itertools._tee object at 0x10222abc8>, <itertools._tee object at 0x10222ac08>]
+    >>> g1, g2 = itertools.tee('ABC')
+    >>> next(g1)
+    'A'
+    >>> next(g2)
+    'A'
+    >>> next(g2)
+    'B'
+    >>> list(g1)
+    ['B', 'C']
+    >>> list(g2)
+    ['C']
+    >>> list(zip(*itertools.tee('ABC')))
+    [('A', 'A'), ('B', 'B'), ('C', 'C')]
+#+END_EXAMPLE
+
+Note that several examples in this section used combinations of generator functions. This is a great feature of these functions: because they all take generators as arguments and return generators, they can be combined in many different ways.
+
+While on the subject of combining generators, the =yield from= statement, new in Python 3.3, is a tool for doing just that.
+
+** New Syntax in Python 3.3: yield from
+
+
+Nested for loops are the traditional solution when a generator function needs to yield values produced from another generator.
+
+For example, here is a homemade implementation of a chaining generator:^{[[[#ftn.id871163][115]]]}
+
+#+BEGIN_EXAMPLE
+    >>> def chain(*iterables):
+    ...     for it in iterables:
+    ...         for i in it:
+    ...             yield i
+    ...
+    >>> s = 'ABC'
+    >>> t = tuple(range(3))
+    >>> list(chain(s, t))
+    ['A', 'B', 'C', 0, 1, 2]
+#+END_EXAMPLE
+
+The =chain= generator function is delegating to each received iterable in turn. [[http://bit.ly/1wpQv0i][PEP 380 --- Syntax for Delegating to a Subgenerator]] introduced new syntax for doing that, shown in the next console listing:
+
+#+BEGIN_EXAMPLE
+    >>> def chain(*iterables):
+    ...     for i in iterables:
+    ...         yield from i
+    ...
+    >>> list(chain(s, t))
+    ['A', 'B', 'C', 0, 1, 2]
+#+END_EXAMPLE
+
+As you can see, =yield from i= replaces the inner =for= loop completely. The use of =yield from= in this example is correct, and the code reads better, but it seems like mere syntactic sugar. Besides replacing a loop, =yield from= creates a channel connecting the inner generator directly to the client of the outer generator. This channel becomes really important when generators are used as coroutines and not only produce but also consume values from the client code. [[file:ch16.html][Chapter 16]] dives into coroutines, and has several pages explaining why =yield from= is much more than syntactic sugar.
+
+After this first encounter with =yield from=, we'll go back to our review of iterable-savvy functions in the standard library.
+
+** Iterable Reducing Functions
+
+
+The functions in [[file:ch14.html#tbl_iter_reducing][Table 14-6]] all take an iterable and return a single result. They are known as “reducing,” “folding,” or “accumulating” functions. Actually, every one of the built-ins listed here can be implemented with =functools.reduce=, but they exist as built-ins because they address some common use cases more easily. Also, in the case of =all= and =any=, there is an important optimization that can't be done with =reduce=: these functions short-circuit (i.e., they stop consuming the iterator as soon as the result is determined). See the last test with =any= in [[file:ch14.html#all_any_demo][Example 14-23]].
+
+
+
+Table 14-6. Built-in functions that read iterables and return single values
+
+Module
+
+Function
+
+Description
+
+(built-in)
+
+=all(it)=
+
+Returns =True= if all items in =it= are truthy, otherwise =False=; =all([])= returns =True=
+
+(built-in)
+
+=any(it)=
+
+Returns =True= if any item in =it= is truthy, otherwise =False=; =any([])= returns =False=
+
+(built-in)
+
+=max(it, [key=,] [default=])=
+
+Returns the maximum value of the items in =it=;^{[[[#ftn.id436670][a]]]} =key= is an ordering function, as in =sorted=; =default= is returned if the iterable is empty
+
+(built-in)
+
+=min(it, [key=,] [default=])=
+
+Returns the minimum value of the items in =it=.^{[[[#ftn.id579302][b]]]} =key= is an ordering function, as in =sorted=; =default= is returned if the iterable is empty
+
+=functools=
+
+=reduce(func, it, [initial])=
+
+Returns the result of applying =func= to the first pair of items, then to that result and the third item and so on; if given, =initial= forms the initial pair with the first item
+
+(built-in)
+
+=sum(it, start=0)=
+
+The sum of all items in =it=, with the optional =start= value added (use =math.fsum= for better precision when adding floats)
+
+
+^{[[[#id436670][a]]]} May also be called as =max(arg1, arg2, …, [key=?])=, in which case the maximum among the arguments is returned.
+
+
+^{[[[#id579302][b]]]} May also be called as =min(arg1, arg2, …, [key=?])=, in which case the minimum among the arguments is returned.
+
+The operation of =all= and =any= is exemplified in [[file:ch14.html#all_any_demo][Example 14-23]].
+
+
+
+Example 14-23. Results of all and any for some sequences
+
+#+BEGIN_EXAMPLE
+    >>> all([1, 2, 3])
+    True
+    >>> all([1, 0, 3])
+    False
+    >>> all([])
+    True
+    >>> any([1, 2, 3])
+    True
+    >>> any([1, 0, 3])
+    True
+    >>> any([0, 0.0])
+    False
+    >>> any([])
+    False
+    >>> g = (n for n in [0, 0.0, 7, 8])
+    >>> any(g)
+    True
+    >>> next(g)
+    8
+#+END_EXAMPLE
+
+A longer explanation about =functools.reduce= appeared in [[file:ch10.html#multi_hashing][Vector Take #4: Hashing and a Faster ==]].
+
+Another built-in that takes an iterable and returns something else is =sorted=. Unlike =reversed=, which is a generator function, =sorted= builds and returns an actual list. After all, every single item of the input iterable must be read so they can be sorted, and the sorting happens in a =list=, therefore =sorted= just returns that =list= after it's done. I mention =sorted= here because it does consume an arbitrary iterable.
+
+Of course, =sorted= and the reducing functions only work with iterables that eventually stop. Otherwise, they will keep on collecting items and never return a result.
+
+We'll now go back to the =iter()= built-in: it has a little-known feature that we haven't covered yet.
+
+** A Closer Look at the iter Function
+
+
+As we've seen, Python calls =iter(x)= when it needs to iterate over an object =x=.
+
+But =iter= has another trick: it can be called with two arguments to create an iterator from a regular function or any callable object. In this usage, the first argument must be a callable to be invoked repeatedly (with no arguments) to yield values, and the second argument is a sentinel: a marker value which, when returned by the callable, causes the iterator to raise =StopIteration= instead of yielding the sentinel.
+
+The following example shows how to use =iter= to roll a six-sided die until a =1= is rolled:
+
+#+BEGIN_EXAMPLE
+    >>> def d6():
+    ...     return randint(1, 6)
+    ...
+    >>> d6_iter = iter(d6, 1)
+    >>> d6_iter
+    <callable_iterator object at 0x00000000029BE6A0>
+    >>> for roll in d6_iter:
+    ...     print(roll)
+    ...
+    4
+    3
+    6
+    3
+#+END_EXAMPLE
+
+Note that the =iter= function here returns a =callable_iterator=. The =for= loop in the example may run for a very long time, but it will never display =1=, because that is the sentinel value. As usual with iterators, the =d6_iter= object in the example becomes useless once exhausted. To start over, you must rebuild the iterator by invoking =iter(…)= again.
+
+A useful example is found in the [[http://bit.ly/1HGqw70][=iter= built-in function documentation]]. This snippet reads lines from a file until a blank line is found or the end of file is reached:
+
+#+BEGIN_EXAMPLE
+    with open('mydata.txt') as fp:
+        for line in iter(fp.readline, ''):
+            process_line(line)
+#+END_EXAMPLE
+
+To close this chapter, I present a practical example of using generators to handle a large volume of data efficiently.
+
+** Case Study: Generators in a Database Conversion Utility
+
+
+A few years ago I worked at BIREME, a digital library run by PAHO/WHO (Pan-American Health Organization/World Health Organization) in São Paulo, Brazil. Among the bibliographic datasets created by BIREME are LILACS (Latin American and Caribbean Health Sciences index) and SciELO (Scientific Electronic Library Online), two comprehensive databases indexing the scientific and technical literature produced in the region.
+
+Since the late 1980s, the database system used to manage LILACS is CDS/ISIS, a non-relational, document database created by UNESCO and eventually rewritten in C by BIREME to run on GNU/Linux servers. One of my jobs was to research alternatives for a possible migration of LILACS---and eventually the much larger SciELO---to a modern, open source, document database such as CouchDB or MongoDB.
+
+As part of that research, I wrote a Python script, /isis2json.py/, that reads a CDS/ISIS file and writes a JSON file suitable for importing to CouchDB or MongoDB. Initially, the script read files in the ISO-2709 format exported by CDS/ISIS. The reading and writing had to be done incrementally because the full datasets were much bigger than main memory. That was easy enough: each iteration of the main =for= loop read one record from the /.iso/ file, massaged it, and wrote it to the /.json/ output.
+
+However, for operational reasons, it was deemed necessary that /isis2json.py/ supported another CDS/ISIS data format: the binary /.mst/ files used in production at BIREME---to avoid the costly export to ISO-2709.
+
+Now I had a problem: the libraries used to read ISO-2709 and /.mst/ files had very different APIs. And the JSON writing loop was already complicated because the script accepted a variety of command-line options to restructure each output record. Reading data using two different APIs in the same =for= loop where the JSON was produced would be unwieldy.
+
+The solution was to isolate the reading logic into a pair of generator functions: one for each supported input format. In the end, the /isis2json.py/ script was split into four functions. You can see the main Python 2 script in [[file:apa.html#support_isis2json][Example A-5]], but the full source code with dependencies is in [[http://bit.ly/1HGqzzT][/fluentpython/isis2json/]] on GitHub.
+
+Here is a high-level overview of how the script is structured:
+
+-  =main=  :: The =main= function uses =argparse= to read command-line options that configure the structure of the output records. Based on the input filename extension, a suitable generator function is selected to read the data and yield the records, one by one.
+-  =iter_iso_records=  :: This generator function reads /.iso/ files (assumed to be in the ISO-2709 format). It takes two arguments: the filename and =isis_json_type=, one of the options related to the record structure. Each iteration of its =for= loop reads one record, creates an empty =dict=, populates it with field data, and yields the =dict=.
+-  =iter_mst_records=  :: This other generator functions reads /.mst/ files.^{[[[#ftn.id502341][116]]]} If you look at the source code for /isis2json.py/, you'll see that it's not as simple as =iter_iso_records=, but its interface and overall structure is the same: it takes a filename and an =isis_json_type= argument and enters a =for= loop, which builds and yields one =dict= per iteration, representing a single record.
+-  =write_json=  :: This function performs the actual writing of the JSON records, one at a time. It takes numerous arguments, but the first one---=input_gen=---is a reference to a generator function: either =iter_iso_records= or =iter_mst_records=. The main =for= loop in =write_json= iterates over the dictionaries yielded by the selected =input_gen= generator, massages it in several ways as determined by the command-line options, and appends the JSON record to the output file.
+
+By leveraging generator functions, I was able to decouple the reading logic from the writing logic. Of course, the simplest way to decouple them would be to read all records to memory, then write them to disk. But that was not a viable option because of the size of the datasets. Using generators, the reading and writing is interleaved, so the script can process files of any size.
+
+Now if /isis2json.py/ needs to support an additional input format---say, MARCXML, a DTD used by the U.S. Library of Congress to represent ISO-2709 data---it will be easy to add a third generator function to implement the reading logic, without changing anything in the complicated =write_json= function.
+
+This is not rocket science, but it's a real example where generators provided a flexible solution to processing databases as a stream of records, keeping memory usage low regardless of the amount of data. Anyone who manages large datasets finds many opportunities for using generators in practice.
+
+The next section addresses an aspect of generators that we'll actually skip for now. Read on to understand why.
+
+** Generators as Coroutines
+
+
+About five years after generator functions with the =yield= keyword were introduced in Python 2.2, [[https://www.python.org/dev/peps/pep-0342/][PEP 342 --- Coroutines via Enhanced Generators]] was implemented in Python 2.5. This proposal added extra methods and functionality to generator objects, most notably the =.send()= method.
+
+Like =.__next__()=, =.send()= causes the generator to advance to the next =yield=, but it also allows the client using the generator to send data into it: whatever argument is passed to =.send()= becomes the value of the corresponding =yield= expression inside the generator function body. In other words, =.send()= allows two-way data exchange between the client code and the generator---in contrast with =.__next__()=, which only lets the client receive data from the generator.
+
+This is such a major “enhancement” that it actually changes the nature of generators: when used in this way, they become /coroutines/. David Beazley---probably the most prolific writer and speaker about coroutines in the Python community---warned in a famous [[http://www.dabeaz.com/coroutines/][PyCon US 2009 tutorial]]:
+
+#+BEGIN_QUOTE
+
+  - Generators produce data for iteration
+  - Coroutines are consumers of data
+  - To keep your brain from exploding, you don't mix the two concepts together
+  - Coroutines are not related to iteration
+  - Note: There is a use of having yield produce a value in a coroutine, but it's not tied to iteration.^{[[[#ftn.id606357][117]]]}
+
+  --- David Beazley /“A Curious Course on Coroutines and Concurrency”/
+
+#+END_QUOTE
+
+I will follow Dave's advice and close this chapter---which is really about iteration techniques---without touching =send= and the other features that make generators usable as coroutines. Coroutines will be covered in [[file:ch16.html][Chapter 16]].
+
+** Chapter Summary
+
+
+Iteration is so deeply embedded in the language that I like to say that Python groks iterators.^{[[[#ftn.id900188][118]]]} The integration of the Iterator pattern in the semantics of Python is a prime example of how design patterns are not equally applicable in all programming languages. In Python, a classic iterator implemented “by hand” as in [[file:ch14.html#ex_sentence1][Example 14-4]] has no practical use, except as a didactic example.
+
+In this chapter, we built a few versions of a class to iterate over individual words in text files that may be very long. Thanks to the use of generators, the successive refactorings of the =Sentence= class become shorter and easier to read---when you know how they work.
+
+We then coded a generator of arithmetic progressions and showed how to leverage the =itertools= module to make it simpler. An overview of 24 general-purpose generator functions in the standard library followed.
+
+Following that, we looked at the =iter= built-in function: first, to see how it returns an iterator when called as =iter(o)=, and then to study how it builds an iterator from any function when called as =iter(func, sentinel)=.
+
+For practical context, I described the implementation of a database conversion utility using generator functions to decouple the reading to the writing logic, enabling efficient handling of large datasets and making it easy to support more than one data input format.
+
+Also mentioned in this chapter were the =yield from= syntax, new in Python 3.3, and coroutines. Both topics were just introduced here; they get more coverage later in the book.
+
+** Further Reading
+
+
+A detailed technical explanation of generators appears in The Python Language Reference in [[http://bit.ly/1MM5Xb5][6.2.9. Yield expressions]]. The PEP where generator functions were defined is [[https://www.python.org/dev/peps/pep-0255/][PEP 255 --- Simple Generators]].
+
+The [[https://docs.python.org/3/library/itertools.html][=itertools= module documentation]] is excellent because of all the examples included. Although the functions in that module are implemented in C, the documentation shows how many of them would be written in Python, often by leveraging other functions in the module. The usage examples are also great: for instance, there is a snippet showing how to use the =accumulate= function to amortize a loan with interest, given a list of payments over time. There is also an [[http://bit.ly/1MM5YvA][Itertools Recipes]] section with additional high-performance functions that use the =itertools= functions as building blocks.
+
+Chapter 4, “Iterators and Generators,” of /Python Cookbook, 3E/ (O'Reilly), by David Beazley and Brian K. Jones, has 16 recipes covering this subject from many different angles, always focusing on practical applications.
+
+The =yield from= syntax is explained with examples in What's New in Python 3.3 (see [[http://bit.ly/1MM6d9R][PEP 380: Syntax for Delegating to a Subgenerator]]). We'll also cover it in detail in [[file:ch16.html#coro_yield_from_sec][Using yield from]] and [[file:ch16.html#yield_from_meaning_sec][The Meaning of yield from]] in [[file:ch16.html][Chapter 16]].
+
+If you are interested in document databases and would like to learn more about the context of [[file:ch14.html#generator_case_study][Case Study: Generators in a Database Conversion Utility]], the Code4Lib Journal---which covers the intersection between libraries and technology---published my paper [[http://journal.code4lib.org/articles/4893][“From ISIS to CouchDB: Databases and Data Models for Bibliographic Records”]]. One section of the paper describes the /isis2json.py/ script. The rest of it explains why and how the semistructured data model implemented by document databases like CouchDB and MongoDB are more suitable for cooperative bibliographic data collection than the relational model.
+
+Soapbox
+
+*Generator Function Syntax: More Sugar Would Be Nice*
+
+#+BEGIN_QUOTE
+  Designers need to ensure that controls and displays for different purposes are significantly different from one another.
+
+  --- Donald Norman /The Design of Everyday Things/
+
+#+END_QUOTE
+
+Source code plays the role of “controls and displays” in programming languages. I think Python is exceptionally well designed; its source code is often as readable as pseudocode. But nothing is perfect. Guido van Rossum should have followed Donald Norman's advice (previously quoted) and introduced another keyword for defining generator expressions, instead of reusing =def=. The “BDFL Pronouncements” section of [[https://www.python.org/dev/peps/pep-0255/][PEP 255 --- Simple Generators]] actually argues:
+
+#+BEGIN_QUOTE
+  A “yield” statement buried in the body is not enough warning that the semantics are so different.
+#+END_QUOTE
+
+But Guido hates introducing new keywords and he did not find that argument convincing, so we are stuck with =def=.
+
+Reusing the function syntax for generators has other bad consequences. In the paper and experimental work “Python, the Full Monty: A Tested Semantics for the Python Programming Language,” Politz^{[[[#ftn.id776292][119]]]} et al. show this trivial example of a generator function (section 4.1 of the paper):
+
+#+BEGIN_EXAMPLE
+    def f(): x=0
+        while True:
+            x += 1
+            yield x
+#+END_EXAMPLE
+
+The authors then make the point that we can't abstract the process of yielding with a function call ([[file:ch14.html#ex_yield_delegate_fail][Example 14-24]]).
+
+
+
+Example 14-24. “[This] seems to perform a simple abstraction over the process of yielding” (Politz et al.)
+
+#+BEGIN_EXAMPLE
+    def f():
+        def do_yield(n):
+            yield n
+        x = 0
+        while True:
+            x += 1
+            do_yield(x)
+#+END_EXAMPLE
+
+If we call =f()= in [[file:ch14.html#ex_yield_delegate_fail][Example 14-24]], we get an infinite loop, and not a generator, because the =yield= keyword only makes the immediately enclosing function a generator function. Although generator functions look like functions, we cannot delegate another generator function with a simple function call. As a point of comparison, the Lua language does not impose this limitation. A Lua coroutine can call other functions and any of them can yield to the original caller.
+
+The new =yield from= syntax was introduced to allow a Python generator or coroutine to delegate work to another, without requiring the workaround of an inner =for= loop. [[file:ch14.html#ex_yield_delegate_fail][Example 14-24]] can be “fixed” by prefixing the function call with =yield from=, as in [[file:ch14.html#ex_yield_delegate_fail2][Example 14-25]].
+
+
+
+Example 14-25. This actually performs a simple abstraction over the process of yielding
+
+#+BEGIN_EXAMPLE
+    def f():
+        def do_yield(n):
+            yield n
+        x = 0
+        while True:
+            x += 1
+            yield from do_yield(x)
+#+END_EXAMPLE
+
+Reusing =def= for declaring generators was a usability mistake, and the problem was compounded in Python 2.5 with coroutines, which are also coded as functions with =yield=. In the case of coroutines, the =yield= just happens to appear---usually---on the righthand side of an assignment, because it receives the argument of the =.send()= call from the client. As David Beazley says:
+
+#+BEGIN_QUOTE
+  Despite some similarities, generators and coroutines are basically two different concepts.^{[[[#ftn.id446763][120]]]}
+#+END_QUOTE
+
+I believe coroutines also deserved their own keyword. As we'll see later, coroutines are often used with special decorators, which do set them apart from other functions. But generator functions are not decorated as frequently, so we have to scan their bodies for =yield= to realize they are not functions at all, but a completely different beast.
+
+It can be argued that, because those features were made to work with little additional syntax, extra syntax would be merely “syntactic sugar.” I happen to like syntactic sugar when it makes features that are different look different. The lack of syntactic sugar is the main reason why Lisp code is hard to read: every language construct in Lisp looks like a function call.
+
+*Semantics of Generator Versus Iterator*
+
+There are at least three ways of thinking about the relationship between iterators and generators.
+
+The first is the interface viewpoint. The Python iterator protocol defines two methods: =__next__= and =__iter__=. Generator objects implement both, so from this perspective, every generator is an iterator. By this definition, objects created by the =enumerate()= built-in are iterators:
+
+#+BEGIN_EXAMPLE
+    >>> from collections import abc
+    >>> e = enumerate('ABC')
+    >>> isinstance(e, abc.Iterator)
+    True
+#+END_EXAMPLE
+
+The second is the implementation viewpoint. From this angle, a generator is a Python language construct that can be coded in two ways: as a function with the =yield= keyword or as a generator expression. The generator objects resulting from calling a generator function or evaluating a generator expression are instances of an internal [[http://bit.ly/1MM6Sbm][=GeneratorType=]]. From this perspective, every generator is also an iterator, because =GeneratorType= instances implement the iterator interface. But you can write an iterator that is not a generator---by implementing the classic Iterator pattern, as we saw in [[file:ch14.html#ex_sentence1][Example 14-4]], or by coding an extension in C. The =enumerate= objects are not generators from this perspective:
+
+#+BEGIN_EXAMPLE
+    >>> import types
+    >>> e = enumerate('ABC')
+    >>> isinstance(e, types.GeneratorType)
+    False
+#+END_EXAMPLE
+
+This happens because [[https://docs.python.org/3/library/types.html#types.GeneratorType][=types.GeneratorType=]] is defined as “The type of generator-iterator objects, produced by calling a generator function.”
+
+The third is the conceptual viewpoint. In the classic Iterator design pattern---as defined in the GoF book---the iterator traverses a collection and yields items from it. The iterator may be quite complex; for example, it may navigate through a tree-like data structure. But, however much logic is in a classic iterator, it always reads values from an existing data source, and when you call =next(it)=, the iterator is not expected to change the item it gets from the source; it's supposed to just yield it as is.
+
+In contrast, a generator may produce values without necessarily traversing a collection, like =range= does. And even if attached to a collection, generators are not limited to yielding just the items in it, but may yield some other values derived from them. A clear example of this is the =enumerate= function. By the original definition of the design pattern, the generator returned by =enumerate= is not an iterator because it creates the tuples it yields.
+
+At this conceptual level, the implementation technique is irrelevant. You can write a generator without using a Python generator object. [[file:ch14.html#ex_fibo][Example 14-26]] is a Fibonacci generator I wrote just to make this point.
+
+
+
+Example 14-26. fibo_by_hand.py: Fibonacci generator without GeneratorType instances
+
+#+BEGIN_EXAMPLE
+    class Fibonacci:
+
+        def __iter__(self):
+            return FibonacciGenerator()
+
+
+    class FibonacciGenerator:
+
+        def __init__(self):
+            self.a = 0
+            self.b = 1
+
+        def __next__(self):
+            result = self.a
+            self.a, self.b = self.b, self.a + self.b
+            return result
+
+        def __iter__(self):
+            return self
+#+END_EXAMPLE
+
+[[file:ch14.html#ex_fibo][Example 14-26]] works but is just a silly example. Here is the Pythonic Fibonacci generator:
+
+#+BEGIN_EXAMPLE
+    def fibonacci():
+        a, b = 0, 1
+        while True:
+            yield a
+            a, b = b, a + b
+#+END_EXAMPLE
+
+And of course, you can always use the generator language construct to perform the basic duties of an iterator: traversing a collection and yielding items from it.
+
+In reality, Python programmers are not strict about this distinction: generators are also called iterators, even in the official docs. The canonical definition of an iterator in the [[http://docs.python.org/dev/glossary.html#term-iterator][Python Glossary]] is so general it encompasses both iterators and generators:
+
+#+BEGIN_QUOTE
+  Iterator: An object representing a stream of data. [...]
+#+END_QUOTE
+
+The full definition of [[https://docs.python.org/3/glossary.html#term-iterator][/iterator/]] in the Python Glossary is worth reading. On the other hand, the definition of [[https://docs.python.org/3/glossary.html#term-generator][/generator/]] there treats /iterator/ and /generator/ as synonyms, and uses the word “generator” to refer both to the generator function and the generator object it builds. So, in the Python community lingo, iterator and generator are fairly close synonyms.
+
+*The Minimalistic Iterator Interface in Python*
+
+In the “Implementation” section of the Iterator pattern,^{[[[#ftn.id595103][121]]]} the /Gang of Four/ wrote:
+
+#+BEGIN_QUOTE
+  The minimal interface to Iterator consists of the operations First, Next, IsDone, and CurrentItem.
+#+END_QUOTE
+
+However, that very sentence has a footnote which reads:
+
+#+BEGIN_QUOTE
+  We can make this interface even smaller by merging Next, IsDone, and CurrentItem into a single operation that advances to the next object and returns it. If the traversal is finished, then this operation returns a special value (0, for instance) that marks the end of the iteration.
+#+END_QUOTE
+
+This is close to what we have in Python: the single method =__next__= does the job. But instead of using a sentinel, which could be overlooked by mistake, the =StopIteration= exception signals the end of the iteration. Simple and correct: that's the Python way.
+
+
+
+--------------
+
+
+^{[[[#id1075798][104]]]} From [[http://www.paulgraham.com/icad.html][“Revenge of the Nerds”]], a blog post.
+
+
+^{[[[#id1043880][105]]]} Python 2.2 users could use =yield= with the directive =from __future__ import generators=; =yield= became available by default in Python 2.3.
+
+
+^{[[[#id1041221][106]]]} We first used =reprlib= in [[file:ch10.html#vector_take1_sec][Vector Take #1: Vector2d Compatible]].
+
+
+^{[[[#id1058770][107]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 259.
+
+
+^{[[[#id1048185][108]]]} When reviewing this code, Alex Martelli suggested the body of this method could simply be =return iter(self.words)=. He is correct, of course: the result of calling =__iter__= would also be an iterator, as it should be. However, I used a =for= loop with =yield= here to introduce the syntax of a generator function, which will be covered in detail in the next section.
+
+
+^{[[[#id505989][109]]]} Sometimes I add a =gen= prefix or suffix when naming generator functions, but this is not a common practice. And you can't do that if you're implementing an iterable, of course: the necessary special method must be named =__iter__=.
+
+
+^{[[[#id506010][110]]]} Thanks to David Kwast for suggesting this example.
+
+
+^{[[[#id1071195][111]]]} Prior to Python 3.3, it was an error to provide a value with the =return= statement in a generator function. Now that is legal, but the =return= still causes a =StopIteration= exception to be raised. The caller can retrieve the return value from the exception object. However, this is only relevant when using a generator function as a coroutine, as we'll see in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]].
+
+
+^{[[[#id505722][112]]]} In Python 2, there was a =coerce()= built-in function but it's gone in Python 3, deemed unnecessary because the numeric coercion rules are implicit in the arithmetic operator methods. So the best way I could think of to coerce the initial value to be of the same type as the rest of the series was to perform the addition and use its type to convert the result. I asked about this in the Python-list and got an excellent [[http://bit.ly/1JIbIYO][response from Steven D'Aprano]].
+
+
+^{[[[#id969978][113]]]} The /14-it-generator// directory in the [[http://bit.ly/1JItSti][/Fluent Python/ code repository]] includes doctests and a script, /aritprog_runner.py/, which runs the tests against all variations of the /aritprog*.py/ scripts.
+
+
+^{[[[#id1007011][114]]]} Here the term “mapping” is unrelated to dictionaries, but has to do with the =map= built-in.
+
+
+^{[[[#id871163][115]]]} The =itertools.chain= from the standard library is written in C.
+
+
+^{[[[#id502341][116]]]} The library used to read the complex /.mst/ binary is actually written in Java, so this functionality is only available when /isis2json.py/ is executed with the Jython interpreter, version 2.5 or newer. For further details, see the [[http://bit.ly/1MM5aXD][/README.rst/]] file in the repository. The dependencies are imported inside the generator functions that need them, so the script can run even if only one of the external libraries is available.
+
+
+^{[[[#id606357][117]]]} Slide 33, “Keeping It Straight,” in [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id900188][118]]]} According to the [[http://catb.org/~esr/jargon/html/G/grok.html][Jargon file]], to /grok/ is not merely to learn something, but to absorb it so “it becomes part of you, part of your identity.”
+
+
+^{[[[#id776292][119]]]} Joe Gibbs Politz, Alejandro Martinez, Matthew Milano, Sumner Warren, Daniel Patterson, Junsong Li, Anand Chitipothu, and Shriram Krishnamurthi, “Python: The Full Monty,” SIGPLAN Not. 48, 10 (October 2013), 217-232.
+
+
+^{[[[#id446763][120]]]} Slide 31, [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
+ception to be raised. The caller can retrieve the return value from the exception object. However, this is only relevant when using a generator function as a coroutine, as we'll see in [[file:ch16.html#coro_return_sec][Returning a Value from a Coroutine]].
+
+
+^{[[[#id505722][112]]]} In Python 2, there was a =coerce()= built-in function but it's gone in Python 3, deemed unnecessary because the numeric coercion rules are implicit in the arithmetic operator methods. So the best way I could think of to coerce the initial value to be of the same type as the rest of the series was to perform the addition and use its type to convert the result. I asked about this in the Python-list and got an excellent [[http://bit.ly/1JIbIYO][response from Steven D'Aprano]].
+
+
+^{[[[#id969978][113]]]} The /14-it-generator// directory in the [[http://bit.ly/1JItSti][/Fluent Python/ code repository]] includes doctests and a script, /aritprog_runner.py/, which runs the tests against all variations of the /aritprog*.py/ scripts.
+
+
+^{[[[#id1007011][114]]]} Here the term “mapping” is unrelated to dictionaries, but has to do with the =map= built-in.
+
+
+^{[[[#id871163][115]]]} The =itertools.chain= from the standard library is written in C.
+
+
+^{[[[#id502341][116]]]} The library used to read the complex /.mst/ binary is actually written in Java, so this functionality is only available when /isis2json.py/ is executed with the Jython interpreter, version 2.5 or newer. For further details, see the [[http://bit.ly/1MM5aXD][/README.rst/]] file in the repository. The dependencies are imported inside the generator functions that need them, so the script can run even if only one of the external libraries is available.
+
+
+^{[[[#id606357][117]]]} Slide 33, “Keeping It Straight,” in [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id900188][118]]]} According to the [[http://catb.org/~esr/jargon/html/G/grok.html][Jargon file]], to /grok/ is not merely to learn something, but to absorb it so “it becomes part of you, part of your identity.”
+
+
+^{[[[#id776292][119]]]} Joe Gibbs Politz, Alejandro Martinez, Matthew Milano, Sumner Warren, Daniel Patterson, Junsong Li, Anand Chitipothu, and Shriram Krishnamurthi, “Python: The Full Monty,” SIGPLAN Not. 48, 10 (October 2013), 217-232.
+
+
+^{[[[#id446763][120]]]} Slide 31, [[http://www.dabeaz.com/coroutines/Coroutines.pdf][“A Curious Course on Coroutines and Concurrency”]].
+
+
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
+utines and Concurrency”]].
+
+<<ftn.id595103>>
+^{[[[#id595103][121]]]} Gamma et. al., /Design Patterns: Elements of Reusable Object-Oriented Software/, p. 261.
+
+
